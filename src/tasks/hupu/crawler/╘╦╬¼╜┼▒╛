@@ -1,0 +1,24 @@
+启动获取用户资料的代码
+cd C:\Users\Administrator\PycharmProjects\test\venv1\Scripts
+python C:\Users\Administrator\PycharmProjects\test\src\crawler\aCrawler4Hupu_soup_prof.py
+
+cd C:\Users\Administrator\PycharmProjects\test\venv1\Scripts
+python C:\Users\Administrator\PycharmProjects\test\src\crawler\aCrawler4HUpu_soup_prof_process.py
+
+启动获取帖子数据的程序
+cd C:\Users\Administrator\PycharmProjects\test\venv1\Scripts
+python C:\Users\Administrator\PycharmProjects\test\src\crawler\aCrawler4Hupu_soup_6.py
+
+cd C:\Users\Administrator\PycharmProjects\test\venv1\Scripts
+python C:\Users\Administrator\PycharmProjects\test\hupu\crawler\aCrawler4Hupu_soup_51.py
+
+
+#查询唯一主贴id
+insert overwrite local directory '/opt/dev/hupuData/post_id'
+ select distinct post_id from hupu_bxj_advocate_post_dir;
+#查询用户uid
+insert overwrite local directory '/opt/dev/hupuData/uid1'
+select distinct uid from hupu_bxj_advocate_post_dir;
+insert overwrite local directory '/opt/dev/hupuData/uid2'
+select distinct uid from hupu_bxj_foll_post_dir;
+#insert overwrite local directory '/opt/dev/hupuData/post_id_fol' select distinct post_id from hupu_bxj_foll_post_dir;
