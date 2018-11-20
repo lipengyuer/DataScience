@@ -19,6 +19,10 @@ class LinearRegressionModel():
         self.batchSize = batchSize#我们把数据分成小块喂给模型学习，通常来说，这样做比让模型一下子学习所有的数据效果要好一点。
         
     def fit(self, trainInput, trainOutput):
+        def predict4Train(inputData):#训练里使用的一个predict函数，
+            # 针对训练数据已经为截距增加了变量的情况
+            res = np.sum(self.pars * inputData)
+            return res
         trainInput = np.insert(trainInput, len(trainInput[0,:]), 1, axis=1)#为截距增加一列取值为1的变量
         self.pars = [random.uniform(0,1) for i in range(len(trainInput[0, :]))]#初始化模型参数，这里使用随机数。
         self.pars = np.array(self.pars)#处理成numpy的数组，便于进行乘法等运算
@@ -29,7 +33,7 @@ class LinearRegressionModel():
                 trainOutputBatch = trainOutput[i: i + self.batchSize]#去除这一批数据的输出
                 delta = []#用来存储基于当前参数和这批数据计算出来的参数修正量
                 for n in range(self.parNum):#更新每一个变量的系数
-                    diffOnThisDim = [trainInputBatch[m,n]*(self.predict(trainInputBatch[m,:]) - trainOutputBatch[m])
+                    diffOnThisDim = [trainInputBatch[m,n]*(predict4Train(trainInputBatch[m,:]) - trainOutputBatch[m])
                                      for m in range(len(trainInputBatch))]#当前变量对应的导数，在每个观测值的情况下的取值
                     diffOnThisDim = np.sum(diffOnThisDim)/(len(trainInputBatch))#梯度在这个维度上分量的大小。
                     #python3X里，除以int时，如果不能整除，就会得到一个float;python2X里则会得到一个想下取整的结果，要注意。
@@ -41,6 +45,7 @@ class LinearRegressionModel():
                               
     #计算一个观测值的输出
     def predict(self, inputData):
+        inputData = np.array(inputData.tolist()+ [1])#为截距增加一列取值为1的变量
         res = np.sum(self.pars*inputData)
         return res
     
@@ -55,14 +60,14 @@ class LinearRegressionModel():
 from sklearn.cross_validation import train_test_split
 if __name__ == '__main__':
     inputList = [[i] for i in range(1, 10)]
-    outputList = [i for i in range(21, 30)]
+    outputList = [i for i in range(21, 30)]#y = x+20
     inputList, _, outputList, _ = train_test_split(inputList, outputList, test_size=0.0)
-    print(inputList)
-    print(outputList)
     inputList = np.array(inputList)
-
-    model = LinearRegressionModel()
-    model.fit(inputList, outputList)
+    model = LinearRegressionModel()#初始化
+    model.fit(inputList, outputList)#训练
+    myX = [22]
+    res = model.predict(np.array(myX))#预测
+    print('myX对应的输出是', res)
     
 
 
