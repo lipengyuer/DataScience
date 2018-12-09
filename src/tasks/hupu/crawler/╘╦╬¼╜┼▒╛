@@ -7,7 +7,7 @@ python C:\Users\Administrator\PycharmProjects\test\src\crawler\aCrawler4HUpu_sou
 
 启动获取帖子数据的程序
 cd C:\Users\Administrator\PycharmProjects\test\venv1\Scripts
-python C:\Users\Administrator\PycharmProjects\test\src\crawler\aCrawler4Hupu_soup_6.py
+python C:\Users\Administrator\PycharmProjects\dataScience\src\tasks\hupu\crawler\aCrawler4Hupu_soup_6.py
 
 cd C:\Users\Administrator\PycharmProjects\test\venv1\Scripts
 python C:\Users\Administrator\PycharmProjects\test\hupu\crawler\aCrawler4Hupu_soup_51.py
