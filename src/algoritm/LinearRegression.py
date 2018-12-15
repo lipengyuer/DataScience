@@ -57,6 +57,18 @@ class LinearRegressionModel():
         #计算拟合优度和调整拟合优度
         pass
 
+    def Ftest(self):
+        pass
+
+    def Ttest(self):
+        pass
+
+    def goodnessOfFit(self):
+        pass
+
+    def VIFTest(self):
+        pass
+
 from sklearn.cross_validation import train_test_split
 if __name__ == '__main__':
     inputList = [[i] for i in range(1, 10)]
