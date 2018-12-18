@@ -5,9 +5,9 @@ import copy
 
 class Tree4Decision():
     def __init__(self):
-        featureNO = -1#当前节点对应的特征编号
-        featureValue = None#当前节点对应的特征取值
-        children = {}#当前节点的子节点
+        self.featureNO = -1#当前节点对应的特征编号
+        self.featureValue = None#当前节点对应的特征取值
+        self.children = {}#当前节点的子节点
 
 class LowDecisionTree():
     #一个比较low的决策树，使用信息熵来选择分组特征
@@ -16,13 +16,40 @@ class LowDecisionTree():
     #各式各样的词语，这样会给我们带来很大的干扰。为了减小这种干扰，大部分教材会给一些重要的词语后面加上(英文及其简称)。记住这些英
     #文名称并在文章中使用，可以阅读者消歧的工作量
     def __init__(self):
+        self.decisionTree = None
         pass
 
     #“训练决策树”这个提法有误导性，在"训练"开始之前，决策树还没有存在，没啥可以训练的。我们需要做的实际上是"构建"一个决策树。
     #fit 这个词语换成generate之类的更合适。
     #决策树的生成过程非常适合用递归的方式来实现。
     def fit(self, inputData, outputData):
+        rootNode = Tree4Decision()
+        leftFeatresIndexList = list(range(len(inputData[0])))
+        self.generateDesisionTree(inputData, outputData, rootNode,  leftFeatresIndexList)
+        self.decisionTree = rootNode
+        print(rootNode.__dict__)
+        self.showTree()
+    
+    #预测一批样本的类别
+    def predict(self, inputData):
         pass
+    
+    #把决策树的结构打印到控制台
+    def showTree(self):
+        print("开始展示决策树", self.decisionTree.__dict__)
+        self.showTreeRecusively(self.decisionTree)
+        
+    def showTreeRecusively(self, currentNode):
+#         print(currentNode)
+        if currentNode.children=={}:
+            return
+        else:
+#             print(currentNode.children)
+            for featureValue in currentNode.children:
+                node = currentNode.children[featureValue]
+                print(node.__dict__)
+                self.showTreeRecusively(node)
+                
     
     def generateDesisionTree(self, inputData, outputData, currentNode, leftFeatresIndexList):
         if len(set(outputData))==len(outputData):#决策树生长到这样一个节点时需要停止，停止的基本策略有两种:
@@ -35,7 +62,7 @@ class LowDecisionTree():
             return currentNode
         else:
             bestSplitFeatureNO = self.chooseBestFeatureWithEntropy(inputData, leftFeatresIndexList, outputData)
-            bestFeatureValues = set(list(map(lambda x: x[bestSplitFeatureNO], inputData)))
+            currentNode.featureNO = bestSplitFeatureNO
             sampleGroupMap = {}
             for i in range(len(outputData)):
                 sampleInputData = inputData[i]
@@ -52,9 +79,10 @@ class LowDecisionTree():
                 thisNode = Tree4Decision()
                 thisNode.featureNO, thisNode.featureValue, thisNode.children= \
                             bestSplitFeatureNO, featureValue, {}#初始化这个取值对应的子节点
+#                 print(currentNode.__dict__)
                 currentNode.children[featureValue] = thisNode
-                self.generateDesisionTree(sampleGroupMap[bestFeatureValue]['inputData'],
-                                          sampleGroupMap[bestFeatureValue]['outputData'],
+                self.generateDesisionTree(sampleGroupMap[featureValue]['inputData'],
+                                          sampleGroupMap[featureValue]['outputData'],
                                           thisNode,
                                           leftFeatresIndexList)
                 
@@ -312,15 +340,17 @@ def check():
     clf.chooseBestFeatureWithIGR(inputData, leftFeatresIndexList, outputData)
 
 if __name__ == '__main__':
+#     check()
+
     #特征:体重{1:轻, 2:中等， 3: 重}，身高{1：矮， 2：中等， 3：高}，性别{1: 男， 2：女}
     #类别{1:成年,2:未成年}
     
-#     inputData = [[1, 1, 2], [2, 3, 2], [3, 3, 1], [2, 1, 1]]
-#     outputData = [2, 1, 1, 2]
-#     clf = ID3DecisionTree()
-#     clf.fit(inputData, outputData)
+    inputData = [[1, 1, 2], [2, 3, 2], [3, 3, 1], [2, 1, 1],[2, 2, 1]]
+    outputData = [2, 1, 1, 1]
+    clf = LowDecisionTree()
+    clf.fit(inputData, outputData)
+    print(outputData)
 #     preds = clf.predict(inputData)
-#     print(outputData)
+
 #     print(preds)
-    check()
 
