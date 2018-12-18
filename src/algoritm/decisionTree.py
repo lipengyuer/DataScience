@@ -3,14 +3,62 @@
 import numpy as np
 import copy
 
-class ID3DecisionTree():
-
+class Tree4Decision():
     def __init__(self):
-        aTree = {}
+        featureNO = -1#当前节点对应的特征编号
+        featureValue = None#当前节点对应的特征取值
+        children = {}#当前节点的子节点
 
+class LowDecisionTree():
+    #一个比较low的决策树，使用信息熵来选择分组特征
+    #数据科学是一个交叉领域，使用了很多学科的思想和技术。在表述同一个概念的时候，不同知识背景的人会使用不同的理论或者语言。
+    #比如这里的"分组特征"，实际上是本人的口语化表达；教材里通常称为"划分属性"(split criteria)，大家把split criteria翻译成
+    #各式各样的词语，这样会给我们带来很大的干扰。为了减小这种干扰，大部分教材会给一些重要的词语后面加上(英文及其简称)。记住这些英
+    #文名称并在文章中使用，可以阅读者消歧的工作量
+    def __init__(self):
+        pass
+
+    #“训练决策树”这个提法有误导性，在"训练"开始之前，决策树还没有存在，没啥可以训练的。我们需要做的实际上是"构建"一个决策树。
+    #fit 这个词语换成generate之类的更合适。
+    #决策树的生成过程非常适合用递归的方式来实现。
     def fit(self, inputData, outputData):
         pass
     
+    def generateDesisionTree(self, inputData, outputData, currentNode, leftFeatresIndexList):
+        if len(set(outputData))==len(outputData):#决策树生长到这样一个节点时需要停止，停止的基本策略有两种:
+            #(1)在决策树的生长过程中，基于特定的规则停止生长，从而获得精简的决策树——这样的策略叫做预剪枝(Pre-Pruning).
+            #(2)对应的，还有一种剪枝策略，称为后剪枝(post-pruning):在决策树完全生长后，再基于特定规则删除不需要的节点。
+            #在基本策略的基础上，我们可以组合或者改造出适合场景的各种生长策略
+            #这里使用的是预剪枝策略，停止生长的条件非常粗暴，就是“这个节点的特征取值对应的所有样本属于同一个类别”。实际上
+            #我们可以构造"纯度"之类的指标，比如某个类别的占比达到60%,这个节点对应的样本就足够纯，停止生长;或者对各个类别加权再计算纯度;
+            #或者我们可以计算信息熵;等等。
+            return currentNode
+        else:
+            bestSplitFeatureNO = self.chooseBestFeatureWithEntropy(inputData, leftFeatresIndexList, outputData)
+            bestFeatureValues = set(list(map(lambda x: x[bestSplitFeatureNO], inputData)))
+            sampleGroupMap = {}
+            for i in range(len(outputData)):
+                sampleInputData = inputData[i]
+                sampleOutputData = outputData[i]
+                bestFeatureValue = sampleInputData[bestSplitFeatureNO]
+                if bestFeatureValue in sampleGroupMap:
+                    sampleGroupMap[bestFeatureValue]['inputData'].append(sampleInputData)
+                    sampleGroupMap[bestFeatureValue]['outputData'].append(sampleOutputData)
+                else:
+                    sampleGroupMap[bestFeatureValue] = {'inputData': [sampleInputData], 
+                                                        'outputData': [sampleOutputData]}
+            leftFeatresIndexList.remove(bestSplitFeatureNO)
+            for featureValue in sampleGroupMap:
+                thisNode = Tree4Decision()
+                thisNode.featureNO, thisNode.featureValue, thisNode.children= \
+                            bestSplitFeatureNO, featureValue, {}#初始化这个取值对应的子节点
+                currentNode.children[featureValue] = thisNode
+                self.generateDesisionTree(sampleGroupMap[bestFeatureValue]['inputData'],
+                                          sampleGroupMap[bestFeatureValue]['outputData'],
+                                          thisNode,
+                                          leftFeatresIndexList)
+                
+        
     #基于特征的信息熵，从未使用的特征中挑选最好的分组特征
     def chooseBestFeatureWithEntropy(self, inputData, leftFeatresIndexList, outputData):
         totalNumOfSamples = len(inputData)#样本的总数，用来计算某个特征取值出现的概率
@@ -47,6 +95,18 @@ class ID3DecisionTree():
         entropyList = sorted(entropyMap.items(), key=lambda x: x[1], reverse=True)#按照熵的大小倒序排列
         bestFeatureNO = entropyList[0][0]#取出熵最大的特这个编号并返回
         return bestFeatureNO
+    
+          
+class ID3DecisionTree():
+
+    def __init__(self):
+        pass
+
+    #“训练决策树”这个提法有误导性，在"训练"开始之前，决策树还没有存在，没啥可以训练的。我们需要做的实际上是"构建"一个决策树。
+    #fit 这个词语换成generate之类的更合适。
+    #决策树的生成过程非常适合用递归的方式来实现。
+    def fit(self, inputData, outputData):
+        pass
     
     #基于信息增益(information gain, IG)来挑选剩余特征中最好的分组特征
     def chooseBestFeatureWithIG(self, inputData, leftFeatresIndexList, outputData):
@@ -129,6 +189,18 @@ class ID3DecisionTree():
         bestFeatureNO = IGList[0][0]
         return bestFeatureNO
 
+
+class C4_5DecisionTree():
+
+    def __init__(self):
+        pass
+
+    #“训练决策树”这个提法有误导性，在"训练"开始之前，决策树还没有存在，没啥可以训练的。我们需要做的实际上是"构建"一个决策树。
+    #fit 这个词语换成generate之类的更合适。
+    #决策树的生成过程非常适合用递归的方式来实现。
+    def fit(self, inputData, outputData):
+        pass
+
     #基于信息增益比率(information gain ratio, IGR)来挑选剩余特征中最好的分组特征
     def chooseBestFeatureWithIGR(self, inputData, leftFeatresIndexList, outputData):
         classLabelSet = set(outputData)
@@ -207,7 +279,7 @@ class ID3DecisionTree():
         print("信息增益比是", IGRList)
         bestFeatureNO = IGRList[0][0]
         return bestFeatureNO
-
+    
 #基于测试数据检查算法正确性
 def check():
     #获取测试数据https://www.cnblogs.com/kanjian2016/p/7746005.html
