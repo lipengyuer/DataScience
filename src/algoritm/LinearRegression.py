@@ -91,6 +91,7 @@ class LinearRegressionModel():
         #计算拟合优度和调整拟合优度
         pass
 
+    #对训练得到的模型进行F检验，打印输出检验结果
     def Ftest(self, alpha=0.05):
         """
         f统计量计算公式:f = [ESS/(k-1)]/[RSS/(N-k)]
@@ -110,9 +111,26 @@ class LinearRegressionModel():
         if fValue>f_alpha:
             print("全部参数全为0的情况下，出现f统计量取值为", fValue, '的概率小于等于', alpha, "说明全部参数不为0")
             print("模型通过了f检验")
-        
-    def Ttest(self):
-        pass
+            
+    #对模型的各个参数进行T检验，并打印输出检验结果
+    def Ttest(self, alpha = 0.05):
+        self.y_hat = np.mean(self.y)
+        self.y_bar = self.predict(self.x)
+        ESS = np.sum([(self.y_bar[i]-self.y_hat)**2 for i in range(self.N)])
+        for i in range(self.k - 1):#对所有自变量的系数进行t检验
+            x_i_list = list(map(lambda x: x[i], self.x))#提取出所有样本的第i个特征的取值
+            var_par_i = ESS/np.var(x_i_list)#模型的第i个系数的方差
+            tValue = ESS/np.sqrt(var_par_i)
+            t_alpha = np.abs(t.ppf(alpha, self.k-1))#求要求显著水平下的t值
+#             print(t_alpha, tValue)
+            print("对参数", i, "的t检验结果")
+            if tValue>t_alpha:
+                print("这个参数的t统计量取值落在显著性水平对应的区间外，出现的概率小于", alpha)
+                print("这说明这个参数等于0的概率很小，是显著的")
+            else:
+                print("这个参数是不显著的")
+            print("^^^^^^^^^^^^^^")
+            
 
     def goodnessOfFit(self):
         pass
@@ -132,7 +150,9 @@ if __name__ == '__main__':
     res = model.predict(np.array(myX))#预测
     print('myX对应的输出是', res)
     model.Ftest()
+    model.Ttest()
     
+
 
 
 
