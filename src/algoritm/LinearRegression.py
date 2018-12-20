@@ -3,18 +3,18 @@ Created on 2018年11月20日
 
 @author: pyli
 '''
-#一个线性回归工具，支持一元线性回归和多元线性回归，用梯度下降求模型参数
+#一个线性回归工具，支持一元线性回归和多元线性回归，损失函数用最小二乘，优化算法用梯度下降
 import random
 import numpy as np
 from scipy.stats import chi2
 from scipy.stats import t
-from scipy.stats import f
+from scipy.stats import f as ff
 from scipy.stats import norm
 import copy
 
 class LinearRegressionModel():
     
-    def __init__(self,learningRate=.000001, stepNum=10000, batchSize=100):
+    def __init__(self,learningRate=.0001, stepNum=10, batchSize=1):
         self.pars = None#回归模型的参数，也就是各个变量的系数。
         self.parNum = 0#模型里自变量的个数，后面需要初始化
         #这里为了方便，截距被当作一个取值固定的变量来处理，系数是1.模型输入后，会初始化这个向量
@@ -32,8 +32,7 @@ class LinearRegressionModel():
         self.y = None#存储因变量的真实值
         self.y_hat = None#存储因变量的平均值
         self.y_bar = None#使用回归模型计算的到的因变量估计值
-
-    #批量梯度下降
+        
     def fit(self, trainInput, trainOutput):
         self.x = copy.deepcopy(trainInput)
         self.N = len(trainOutput)
@@ -43,7 +42,7 @@ class LinearRegressionModel():
             res = np.sum(self.pars * inputData)
             return res
         trainInput = np.insert(trainInput, len(trainInput[0,:]), 1, axis=1)#为截距增加一列取值为1的变量
-        self.pars = [0 for i in range(len(trainInput[0, :]))]#初始化模型参数，这里使用随机数。
+        self.pars = [random.uniform(0,1) for i in range(len(trainInput[0, :]))]#初始化模型参数，这里使用随机数。
         self.pars = np.array(self.pars)#处理成numpy的数组，便于进行乘法等运算
         self.parNum = len(self.pars)#初始化模型里自变量的个数
         self.k = self.parNum
@@ -56,6 +55,8 @@ class LinearRegressionModel():
                     diffOnThisDim = [trainInputBatch[m,n]*(predict4Train(trainInputBatch[m,:]) - trainOutputBatch[m])
                                      for m in range(len(trainInputBatch))]#当前变量对应的导数，在每个观测值的情况下的取值
                     diffOnThisDim = np.sum(diffOnThisDim)/(len(trainInputBatch))#梯度在这个维度上分量的大小。
+                    diffOnThisDim = diffOnThisDim/np.sqrt(np.abs(diffOnThisDim))
+
                     #python3X里，除以int时，如果不能整除，就会得到一个float;python2X里则会得到一个想下取整的结果，要注意。
                     delta.append(-self.learningRate*diffOnThisDim)
 #                 print("修正量是", delta)
@@ -107,7 +108,7 @@ class LinearRegressionModel():
         RSS = np.sum([(self.y_bar[i]-self.y[i])**2 for i in range(self.N)])
         print("f分布的自由度是",  self.k-1,  self.N-self.k)
         fValue = (ESS/(self.k-1))/(RSS/(self.N-self.k))#要求是多元线性回归模型,样本数量大于参数个数
-        f_alpha = f.isf(alpha, self.k-1, self.N-self.k)
+        f_alpha = ff.isf(alpha, self.k-1, self.N-self.k)
         print(fValue, f_alpha)
         if fValue>f_alpha:
             print("全部参数全为0的情况下，出现f统计量取值为", fValue, '的概率小于等于', alpha, "说明全部参数不为0")
@@ -133,30 +134,29 @@ class LinearRegressionModel():
             print("^^^^^^^^^^^^^^")
             
 
-    # 计算模型的调整判定系数
     def goodnessOfFit(self):
-        self.y_hat = np.mean(self.y)  # 输出的均值
-        self.y_bar = self.predict(self.x)  # 因变量的预测值
-        from matplotlib import pyplot as plt
-        plt.plot(self.y, self.y_bar, '.')#画图演示因变量的真实值和预测值之间的关系
-        plt.show()
-        TSS = np.sum([(self.y[i] - self.y_hat) ** 2 for i in range(self.N)])  # 因变量的总平方和
-        RSS = np.sum([(self.y_bar[i] - self.y[i]) ** 2 for i in range(self.N)])  # 残差平方和
-        #TSS = ESS + RSS
-        # r2 = (ESS / (self.N - self.k - 1)) / (TSS / (self.N - 1))#这样得到的判定系数可能大于1
-        r2 = 1-(RSS / (self.N - self.k - 1)) / (TSS / (self.N - 1))#取值范围在[0,1]内
-        r2 = np.sqrt(r2)
-        print("模型的调整判定系数是", r2)
+        pass
 
     def VIFTest(self):
         pass
 
 from sklearn.cross_validation import train_test_split
 if __name__ == '__main__':
-    inputList = [[8.34, 40.77, 1010.84, 90.01], [23.64, 58.49, 1011.4, 74.2], [29.74, 56.9, 1007.15, 41.91], [19.07, 49.69, 1007.22, 76.79], [11.8, 40.66, 1017.13, 97.2], [13.97, 39.16, 1016.05, 84.6], [22.1, 71.29, 1008.2, 75.38], [14.47, 41.76, 1021.98, 78.41], [31.25, 69.51, 1010.25, 36.83], [6.77, 38.18, 1017.8, 81.13], [28.28, 68.67, 1006.36, 69.9], [22.99, 46.93, 1014.15, 49.42], [29.3, 70.04, 1010.95, 61.23], [8.14, 37.49, 1009.04, 80.33], [16.92, 44.6, 1017.34, 58.75], [22.72, 64.15, 1021.14, 60.34], [18.14, 43.56, 1012.83, 47.1], [11.49, 44.63, 1020.44, 86.04], [9.94, 40.46, 1018.9, 68.51], [23.54, 41.1, 1002.05, 38.05]]
+    inputList = [[i, i**0.5] for i in range(1, 10)]
+    outputList = [i for i in range(21, 30)]#y = x+20
 
-    outputList = [480.48, 445.75, 438.76, 453.09, 464.43, 470.96, 442.35, 464.0, 428.77, 484.31, 435.29, 451.41, 426.25, 480.66, 460.17, 453.13, 461.71, 471.08, 473.74, 448.56]
-
+    fileName = '/home/pyli/tasks/小任务/data.txt'
+    with open(fileName, 'r') as f:
+        lines = f.readlines()
+        lines = list(map(lambda x: x.replace('\n', '').split('\t'), lines))
+    outputList = []
+    inputList = []
+    for line in lines[:-1]:
+#         print(line)
+        line = list(map(lambda x: float(x), line))
+        outputList.append(line[-1])
+        inputList.append(line[:-1])
+        
     inputList, _, outputList, _ = train_test_split(inputList, outputList, test_size=0.0)
     inputList = np.array(inputList)
     model = LinearRegressionModel()#初始化
@@ -166,7 +166,7 @@ if __name__ == '__main__':
     print('myX对应的输出是', res)
     model.Ftest()
     model.Ttest()
-    model.goodnessOfFit()
+    
 
 
 
