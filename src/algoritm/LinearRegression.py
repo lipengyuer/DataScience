@@ -134,8 +134,22 @@ class LinearRegressionModel():
             print("^^^^^^^^^^^^^^")
             
 
+    #计算模型的调整判定系数
     def goodnessOfFit(self):
-        pass
+        self.y_hat = np.mean(self.y)#输出的均值
+        print("输出的均值是", self.y_hat)
+        self.y_bar = self.predict(self.x)#因变量的预测值
+        from matplotlib import pyplot as plt
+        plt.plot(self.y, self.y_bar, '.')
+        plt.show()
+        TSS = np.sum([(self.y[i] - self.y_hat)**2 for i in range(self.N)])#因变量的总平方和
+        ESS = np.sum([(self.y_bar[i]-self.y_hat)**2 for i in range(self.N)])#回归平方和
+        RSS = np.sum([(self.y_bar[i]-self.y[i])**2 for i in range(self.N)])#残差平方和
+#         TSS = ESS + RSS
+        ESS = TSS - RSS
+        print(ESS, RSS, TSS)
+        r2 = (ESS/(self.N-self.k-1))/(TSS/(self.N-1))
+        print("模型的调整判定系数是", r2)
 
     def VIFTest(self):
         pass
