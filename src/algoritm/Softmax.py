@@ -119,9 +119,14 @@ class Softmax():
     def evaluateModel(self, testInput, testOutput):
         predOutput = self.predict(testInput)
     
-    def showConfusionMaxtrix(self, ):
-        pass
-
+    def showConfusionMaxtrix(self, predOutput, realOutput):
+        confusionMatrix = np.zeros((self.classNum, self.classNum))
+        for i in range(len(predOutput)):
+            classIndex = realOutput[i].index(1)
+            confusionMatrix[classIndex, :] += predOutput[i]
+        print("混淆矩阵:")
+        print("列表示预测类别;行表示真实类别")
+        print(confusionMatrix)
 
 from sklearn.cross_validation import train_test_split
 if __name__ == '__main__':
@@ -145,10 +150,15 @@ if __name__ == '__main__':
         
     inputList, _, outputList, _ = train_test_split(inputList, outputList, test_size=0.0)
     inputList = np.array(inputList)
-    model = Softmax(stepNum = 100, learningRate=0.001)#初始化
+    model = Softmax(stepNum = 300, learningRate=0.0001)#初始化
     model.fit(inputList, outputList)#训练
     myX = inputList[5]
     predList = model.predict(inputList)#预测
     for i in range(len(predList)):
         print('myX对应的输出是', predList[i], '实际类别是', outputList[i])
+    model.showConfusionMaxtrix(predList, outputList)
+    
+    
+    
+    
 
