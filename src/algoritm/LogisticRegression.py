@@ -50,13 +50,13 @@ class LogisticRegressionModel():
 #                 print("修正量是", delta)
                 self.pars = [self.pars[m] + delta[m] 
                                      for m in range(len(self.pars))] #更新这个维度上的参数，也就是第n个变量的系数
-                print(self.pars)
+                # print(self.pars)
                               
     #计算一个观测值的输出
     def predict(self, inputData):
         flag = False#是单个样本
         try: 
-            inputData[0][0]
+            inputData[0][0]#如果报错，说明是一个一维数组，输入数据是一个样本；反之是多个样本
             flag = True
             print("是多个样本", flag, type(inputData[0][0]),type(inputData[0][0])==int, type(inputData[0][0])==float)
         except:
@@ -65,32 +65,98 @@ class LogisticRegressionModel():
             inputData = np.array(inputData.tolist()+ [1])#为截距增加一列取值为1的变量
             res = np.sum(self.pars*inputData)
             res = 1/(1 + np.exp(-res))
+            if res>0.5:#如果概率值大于0.5,我们认为是正例，类别标签赋值为1。
+                #阈值不局限于0.5,可以根据需求调高或者降低。
+                res = 1
+            else:#如果概率值小于0.5,我们认为是负例，类别标签赋值为0
+                res = 0
         else:
             res = []
-#             print(inputData)
             for line in inputData:
-#                 print(line)
                 line = np.array(line.tolist()+ [1])#为截距增加一列取值为1的变量
                 tempRes = np.sum(self.pars*line)
                 tempRes = 1/(1 + np.exp(-tempRes))
+                if tempRes > 0.5:
+                    tempRes = 1
+                else:
+                    tempRes = 0
                 res.append(tempRes)
         return res
     
     #评估模型
-    def evaluateModel(self):
-        pass
+    #统计分类器的分类准确率
+    def calAccuracy(self, predOutput, realOutput):
+        rightDecisionNum = 0#正确分类的样本数
+        for i in range(len(predOutput)):
+            if predOutput[i] == realOutput[i]:#如果预测的类别和真实类别相同
+                rightDecisionNum += 1.
+        print("分类的准确率是", rightDecisionNum/len(predOutput))
 
+    #分类器对正例的召回率
+    def calRecall(self, predOutput, realOutput):
+        foundRealPositiveNum = 0#找到的正例个数
+        for _ in range(len(predOutput)):
+            if predOutput[i] == realOutput[i]==1:#如果预测类别和真实类别都是正例
+                foundRealPositiveNum += 1.
+        recall = foundRealPositiveNum / len(predOutput)
+        print("对正例的召回率是", recall)
+        return recall
+
+    #分类器对正例的分类精度
+    def calPrecision(self, predOutput, realOutput):
+        foundRealPositiveNum = 0
+        realPositiveNum = 0#真实类别为正例的样本个数
+        for i in range(len(predOutput)):
+            if realOutput[i]==1:
+                realPositiveNum += 1.
+                if predOutput[i] == realOutput[i]:
+                    foundRealPositiveNum += 1.
+        precision = foundRealPositiveNum /realPositiveNum
+        print("对正例的分类精度是", precision)
+        return precision
+
+    #分类器对正例的F1-score
+    def calF1Score(self, predOutput, realOutput):
+        recall = self.calRecall(predOutput, realOutput)
+        precision = self.calPrecision(predOutput, realOutput)
+        if recall+precision==0:#如果两个指标都为0
+            f1score = 0
+        else:
+            f1score = 2*recall*precision/(recall + precision)#f1-score的计算公式
+        print("对正例的f1-score是", f1score)
+
+    #统计分类器的混淆矩阵
+    def calConfusionMatrix(self, predOutput, realOutput):
+        confusionMatrix = np.zeros((2, 2))
+        for i in range(len(predOutput)):
+            print(predOutput[i], realOutput[i])
+            confusionMatrix[predOutput[i], realOutput[i]] += 1#分类器预测的类别为predOutput[i]
+            #真实类别为realOutput[i]的样本个数加一
+        print("混淆矩阵:")
+        print("列表示预测类别;行表示真实类别")
+        print(confusionMatrix)
+
+
+dataStr = """5.1	3.5	1.4	0.2	Iris-setosa
+4.9	3	1.4	0.2	Iris-setosa
+4.7	3.2	1.3	0.2	Iris-setosa
+4.6	3.1	1.5	0.2	Iris-setosa
+7.7	3	6.1	2.3	Iris-virginica
+6.3	3.4	5.6	2.4	Iris-virginica
+6.4	3.1	5.5	1.8	Iris-virginica
+6	3	4.8	1.8	Iris-virginica
+6.9	3.1	5.4	2.1	Iris-virginica
+6.7	3.1	5.6	2.4	Iris-virginica"""
 
 from sklearn.cross_validation import train_test_split
 if __name__ == '__main__':
-    fileName = 'irisData.txt'
-    with open(fileName, 'r') as f:
-        lines = f.readlines()
-        lines = list(map(lambda x: x.replace('\n', '').split(','), lines))
+    lines = dataStr.split('\n')
+    # lines = open('iris.data', 'r').readlines()
+    lines = list(map(lambda x: x.replace('\n', '').split('\t'), lines))
+    print(lines)
     outputList = []
     inputList = []
     for line in lines[:-1]:
-#         print(line)
         label = line[-1]
         line = list(map(lambda x: float(x), line[:-1]))
         if label=='Iris-virginica':
@@ -99,12 +165,15 @@ if __name__ == '__main__':
             outputList.append(0)
         inputList.append(line)
         
-    inputList, _, outputList, _ = train_test_split(inputList, outputList, test_size=0.0)
-    inputList = np.array(inputList)
+    inputList, testInputList, outputList, testOutputList = \
+        train_test_split(inputList, outputList, test_size=0.2)
+    inputList, testInputList = np.array(inputList),  np.array(testInputList)
     model = LogisticRegressionModel(stepNum = 20)#初始化
     model.fit(inputList, outputList)#训练
     myX = inputList[5]
-    predList = model.predict(inputList)#预测
+    predList = model.predict(testInputList)#预测
     for i in range(len(predList)):
         print('myX对应的输出是', predList[i], '实际类别是', outputList[i])
+    model.calF1Score(predList, testOutputList)
+    model.calConfusionMatrix(predList, testOutputList)
 
