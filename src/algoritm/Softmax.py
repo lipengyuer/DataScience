@@ -3,7 +3,7 @@ Created on 2018年11月20日
 
 @author: pyli
 '''
-#逻辑回归
+#softmax回归
 import random
 import numpy as np
 import copy
@@ -26,12 +26,8 @@ class Softmax():
         self.classNum = len(trainOutput[0])
         def predict4Train(inputData):#训练里使用的一个predict函数，
             # 针对训练数据已经为截距增加了变量的情况
-#             print(self.pars)
-#             print(inputData)
             probList = np.dot(self.pars, np.transpose(inputData))
-            probList = list(probList[:, 0])#从矩阵的第一行才是概率分布列表
-#             print(probList)
-
+            probList = list(probList[:, 0])#矩阵的第一行是概率分布列表
             probList = self.softmax(probList)
             probList = list(probList)
             return probList
@@ -43,32 +39,26 @@ class Softmax():
                       for j in range(self.classNum)]#初始化模型参数矩阵(self.classNum行self.parNum列)，这里使用0。
         self.pars = np.array(self.pars)#处理成numpy的数组，便于进行乘法等运算
         self.k = self.parNum
-        for _ in range(self.stepNum):#当前批次的数据需要学习多次
+        for _ in range(self.stepNum):#数据需要学习多次
             for i in range(0, len(trainInput)):#遍历样本
                 thisInput = trainInput[i, :]
                 thisInput = np.array([thisInput])
                 thisOutPut = trainOutput[i, :]
-                ####################开始计算各个参数的梯度
-                delta = np.zeros((self.classNum, self.parNum))#用来存储基于当前参数和这批数据计算出来的参数修正量
+                delta = np.zeros((self.classNum, self.parNum))#用来存储基于当前参数和这个样本计算出来的参数修正量
                 costValue = 0
                 predProbList = predict4Train(thisInput)
-#                 print(thisOutPut, predProbList)
-
                 for m in range(self.classNum):#遍历每一个softmax函数
-#                     print(thisInput)
                     realProbThisClass = thisOutPut[m]
                     for n in range(self.parNum):#遍历这个softmax函数的每一个参数
                         predProbThisClass = predProbList[m]
                         if predProbThisClass>0:
                             costValue += realProbThisClass*np.log10(predProbThisClass)
                         gradOnThisDim = thisInput[0,n] * (predProbThisClass - realProbThisClass)
-#                         print(gradOnThisDim)
                         #python3X里，除以int时，如果不能整除，就会得到一个float;python2X里则会得到一个想下取整的结果，要注意。
                         delta[m, n] = -self.learningRate*gradOnThisDim
-#                 print("修正量是", delta)
                 self.pars += delta #更新参数
                 print("损失值为", costValue)
-#                 print(self.pars)
+                # print(self.pars)
                               
     #计算一个观测值的输出
     def predict(self, inputData):
@@ -87,16 +77,14 @@ class Softmax():
             maxProb = np.max(probList)
             probList = list(probList)
             maxProbIndex = probList.index(maxProb)
+            #用来做预测的时候，需要将概率值二值化，也就是输出类别标签
             predLabel = [1 if i==maxProbIndex else 0 for i in range(len(probList))]
             return predLabel
         else:
             res = []
-#             print(inputData)
             for line in inputData:
-#                 print(line)
                 line = np.array(line.tolist()+ [1])#为截距增加一列取值为1的变量
                 probList = np.dot(self.pars, np.transpose(line))
-#                 print(probList)
                 probList = list(probList)#从矩阵的第一行才是概率分布列表
                 probList = self.softmax(probList)
                 maxProb = np.max(probList)
@@ -108,17 +96,15 @@ class Softmax():
 
     def softmax(self, xList):
         xArray = np.array(xList)
+        xArray = np.exp(xArray)
         sumV = sum(xArray)
-        if sumV==0:
+        if sumV==0:#如果各家概率都是零
             result = xArray*0
         else:
             result = xArray/sumV
         return result
-        
-    #评估模型
-    def evaluateModel(self, testInput, testOutput):
-        predOutput = self.predict(testInput)
-    
+
+    #统计并打印混淆矩阵
     def showConfusionMaxtrix(self, predOutput, realOutput):
         confusionMatrix = np.zeros((self.classNum, self.classNum))
         for i in range(len(predOutput)):
@@ -128,18 +114,47 @@ class Softmax():
         print("列表示预测类别;行表示真实类别")
         print(confusionMatrix)
 
+dataStr = """5.1,3.5,1.4,0.2,Iris-setosa
+4.9,3.0,1.4,0.2,Iris-setosa
+4.7,3.2,1.3,0.2,Iris-setosa
+4.6,3.1,1.5,0.2,Iris-setosa
+5.0,3.6,1.4,0.2,Iris-setosa
+5.4,3.9,1.7,0.4,Iris-setosa
+4.6,3.4,1.4,0.3,Iris-setosa
+5.0,3.4,1.5,0.2,Iris-setosa
+4.4,2.9,1.4,0.2,Iris-setosa
+4.9,3.1,1.5,0.1,Iris-setosa
+5.4,3.7,1.5,0.2,Iris-setosa
+5.2,2.7,3.9,1.4,Iris-versicolor
+5.0,2.0,3.5,1.0,Iris-versicolor
+5.9,3.0,4.2,1.5,Iris-versicolor
+6.0,2.2,4.0,1.0,Iris-versicolor
+6.1,2.9,4.7,1.4,Iris-versicolor
+5.6,2.9,3.6,1.3,Iris-versicolor
+6.7,3.1,4.4,1.4,Iris-versicolor
+5.6,3.0,4.5,1.5,Iris-versicolor
+5.8,2.7,4.1,1.0,Iris-versicolor
+6.2,2.2,4.5,1.5,Iris-versicolor
+5.6,2.8,4.9,2.0,Iris-virginica
+7.7,2.8,6.7,2.0,Iris-virginica
+6.3,2.7,4.9,1.8,Iris-virginica
+6.7,3.3,5.7,2.1,Iris-virginica
+7.2,3.2,6.0,1.8,Iris-virginica
+6.2,2.8,4.8,1.8,Iris-virginica
+6.1,3.0,4.9,1.8,Iris-virginica
+6.4,2.8,5.6,2.1,Iris-virginica"""
 from sklearn.cross_validation import train_test_split
 if __name__ == '__main__':
-    fileName = 'irisData.txt'
+    fileName = 'iris.data'
+    lines = dataStr.split('\n')
     with open(fileName, 'r') as f:
         lines = f.readlines()
         lines = list(map(lambda x: x.replace('\n', '').split(','), lines))
     outputList = []
     inputList = []
     for line in lines[:-1]:
-#         print(line)
         label = line[-1]
-        line = list(map(lambda x: float(x)/10, line[:-1]))
+        line = list(map(lambda x: float(x), line[:-1]))
         if label=='Iris-virginica':
             outputList.append([1., 0., 0.])
         elif label=='Iris-setosa':
@@ -150,9 +165,10 @@ if __name__ == '__main__':
         
     inputList, _, outputList, _ = train_test_split(inputList, outputList, test_size=0.0)
     inputList = np.array(inputList)
-    model = Softmax(stepNum = 300, learningRate=0.0001)#初始化
+    model = Softmax(stepNum = 100, learningRate=0.002)#初始化
     model.fit(inputList, outputList)#训练
     myX = inputList[5]
+    #这里直接使用训练样本来测试模型，实际上是违规的
     predList = model.predict(inputList)#预测
     for i in range(len(predList)):
         print('myX对应的输出是', predList[i], '实际类别是', outputList[i])
