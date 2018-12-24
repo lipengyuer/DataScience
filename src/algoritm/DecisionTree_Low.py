@@ -182,9 +182,9 @@ def check():
     clf = LowDecisionTree()
     leftFeatresIndexList = list(range(len(inputData[0])))#当前剩余的特征数是全部
     clf.fit(inputData, outputData)
-    print(outputData)
-    preds = clf.predictOne(inputData[6])
-    print(preds)   
+    for i in range(len(inputData)):
+        preds = clf.predictOne(inputData[i])
+        print(preds, outputData[i])   
 if __name__ == '__main__':
     check()
 
