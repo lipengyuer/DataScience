@@ -1,7 +1,7 @@
 #一个用来对简单情况下的样本，即取值空间有限的离散特征，进行分类的决策树。
 #输入可以是字符串或者整数，保证是类别变量就可以。
 import numpy as np
-import copy
+from sklearn.cross_validation import train_test_split
 
 class Tree4Decision():
     def __init__(self):
@@ -18,7 +18,10 @@ class LowDecisionTree():
     #文名称并在文章中使用，可以阅读者消歧的工作量
     def __init__(self):
         self.decisionTree = None#用于存储决策树
-        pass
+        self.lowerLimitOfPurity = 0.8#训练决策树时，一个节点对应的样本的纯度阈值。当纯度大于这个值时，剪枝，
+        #也就是不继续对这部分样本进行分组
+        #self.maxDepth = 5#通常来说，我们会限制决策树使用的特征个数，也就是决策树的高度，
+        #也就是从根节点出发到最深的节点的据经长度。这里为了简单，没有使用这个剪枝策略
 
     #“训练决策树”这个提法有误导性，在"训练"开始之前，决策树还没有存在，没啥可以训练的。我们需要做的实际上是"构建"一个决策树。
     #fit 这个词语换成generate之类的更合适。
@@ -28,7 +31,6 @@ class LowDecisionTree():
         leftFeatresIndexList = list(range(len(inputData[0])))#根节点对应的未使用特征列表就是所有特征
         self.generateDesisionTree(inputData, outputData, rootNode,  leftFeatresIndexList)#生成决策树
         self.decisionTree = rootNode
-#         print(rootNode.__dict__)
         self.showTree()
     
     #预测一批样本的类别
@@ -39,7 +41,6 @@ class LowDecisionTree():
         while ifHasChildren==True:
             featureNO = childrenTree.featureNO
             featureValue = inputData[featureNO]
-#             print(featureNO, featureValue, childrenTree.__dict__)
             if childrenTree.children=={}:
                 ifHasChildren = False
                 classLabel = childrenTree.classLabel
@@ -51,31 +52,30 @@ class LowDecisionTree():
     def showTree(self):
         print("开始展示决策树", self.decisionTree.__dict__)
         self.showTreeRecusively(self.decisionTree)
-#         print(self.decisionTree.children[3].__dict__)
-        
+    
+    #递归地打印决策树
     def showTreeRecusively(self, currentNode):
-#         print(currentNode)
         if currentNode.children=={}:
             return
         else:
-#             print(currentNode.children)
             for featureValue in currentNode.children:
                 node = currentNode.children[featureValue]
                 self.showTreeRecusively(node)
                 print(node.__dict__)
     
+    #计算一组样本的纯度，并返回数量最大的那个类别的标签。纯度的计算方式:纯度=样本量最多的那个类别的样本数量/样本总数。
     def calPurity(self, outputData):
         labelNumMap = {}
         for label in outputData:
             labelNumMap[label] = labelNumMap.get(label, 0) + 1
-#         print(labels, labelNumMap)
         labelNumList = sorted(labelNumMap.items(), key=lambda x: x[1], reverse=True)
         mostLabel = labelNumList[0][0]
         purity = labelNumMap[mostLabel]/len(outputData)
-        return purity
+        return purity, mostLabel
     
+    #基于训练数据生成决策树
     def generateDesisionTree(self, inputData, outputData, currentNode, leftFeatresIndexList):
-        purity = self.calPurity(outputData)
+        purity, mostLabel = self.calPurity(outputData)
 #         if len(set(outputData))==len(outputData):#决策树生长到这样一个节点时需要停止，停止的基本策略有两种:
             #(1)在决策树的生长过程中，基于特定的规则停止生长，从而获得精简的决策树——这样的策略叫做预剪枝(Pre-Pruning).
             #(2)对应的，还有一种剪枝策略，称为后剪枝(post-pruning):在决策树完全生长后，再基于特定规则删除不需要的节点。
@@ -83,10 +83,9 @@ class LowDecisionTree():
             #这里使用的是预剪枝策略，停止生长的条件非常粗暴，就是“这个节点的特征取值对应的所有样本属于同一个类别”。实际上
             #我们可以构造"纯度"之类的指标，比如某个类别的占比达到60%,这个节点对应的样本就足够纯，停止生长;或者对各个类别加权再计算纯度;
             #或者我们可以计算信息熵;等等。
-        if purity>0.8 or leftFeatresIndexList==[]:
-            print("纯度是",purity, leftFeatresIndexList)
-            print(outputData)
-            currentNode.classLabel = outputData[0]
+        if purity>self.lowerLimitOfPurity or leftFeatresIndexList==[]:
+#             print("纯度是",purity, leftFeatresIndexList)
+            currentNode.classLabel = mostLabel#将这个组内样本数量最多的类别，作为这个叶子节点的类别
             return currentNode
         else:
             #选择最好的划分属性
@@ -150,9 +149,8 @@ class LowDecisionTree():
                 featureEntropy -= (num/totalNumOfSamples)*np.log2(num/totalNumOfSamples)
                 #信息熵公式entropy= - p_1*log(p_1) - p_2*log(p_2) - ... - p_k*log(p_k)
             entropyMap[featureNO] = featureEntropy
-        print("各个特征的信息熵情况是", entropyMap)
+#         print("各个特征的信息熵情况是", entropyMap)
         entropyList = sorted(entropyMap.items(), key=lambda x: x[1], reverse=True)#按照熵的大小倒序排列
-        print(entropyList)
         bestFeatureNO = entropyList[0][0]#取出熵最大的特这个编号并返回
         return bestFeatureNO
     
@@ -163,7 +161,7 @@ class LowDecisionTree():
                 rightDecisionNum += 1.
         print("分类的准确率是", rightDecisionNum/len(predOutput))
 
-from sklearn.cross_validation import train_test_split
+#对iris数据集进行简单的预处理后，训练一个决策树并测试效果
 def checkByIris():
     with open('iris.data', 'r') as f:
         lines = f.readlines()
@@ -219,15 +217,4 @@ def check():
         
 if __name__ == '__main__':
     checkByIris()
-
-    #特征:体重{1:轻, 2:中等， 3: 重}，身高{1：矮， 2：中等， 3：高}，性别{1: 男， 2：女}
-    #类别{1:成年,2:未成年}
-    
-#     inputData = [[1, 1, 2], [2, 3, 2], [3, 3, 1], [2, 1, 1],[2, 2, 1]]
-#     outputData = [2, 1, 1, 1]
-#     clf = LowDecisionTree()
-#     clf.fit(inputData, outputData)
-#     print(outputData)
-#     preds = clf.predictOne(inputData[0])
-#     print(preds)
 

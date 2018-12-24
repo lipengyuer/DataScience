@@ -13,7 +13,8 @@ class Tree4Decision():
 class C4_5DecisionTree():
 
     def __init__(self):
-        pass
+        self.decisionTree = None#用于存储决策树
+        self.lowerLimitOfPurity = 0.8#训练决策树时，一个节点对应的样本的纯度阈值。当纯度大于这个值时，剪枝，
 
     #“训练决策树”这个提法有误导性，在"训练"开始之前，决策树还没有存在，没啥可以训练的。我们需要做的实际上是"构建"一个决策树。
     #fit 这个词语换成generate之类的更合适。
@@ -49,10 +50,10 @@ class C4_5DecisionTree():
         labelNumList = sorted(labelNumMap.items(), key=lambda x: x[1], reverse=True)
         mostLabel = labelNumList[0][0]
         purity = labelNumMap[mostLabel]/len(outputData)
-        return purity
+        return purity, mostLabel
     
     def generateDesisionTree(self, inputData, outputData, currentNode, leftFeatresIndexList):
-        purity = self.calPurity(outputData)
+        purity, mostLabel = self.calPurity(outputData)
 #         if len(set(outputData))==len(outputData):#决策树生长到这样一个节点时需要停止，停止的基本策略有两种:
             #(1)在决策树的生长过程中，基于特定的规则停止生长，从而获得精简的决策树——这样的策略叫做预剪枝(Pre-Pruning).
             #(2)对应的，还有一种剪枝策略，称为后剪枝(post-pruning):在决策树完全生长后，再基于特定规则删除不需要的节点。
@@ -60,8 +61,8 @@ class C4_5DecisionTree():
             #这里使用的是预剪枝策略，停止生长的条件非常粗暴，就是“这个节点的特征取值对应的所有样本属于同一个类别”。实际上
             #我们可以构造"纯度"之类的指标，比如某个类别的占比达到60%,这个节点对应的样本就足够纯，停止生长;或者对各个类别加权再计算纯度;
             #或者我们可以计算信息熵;等等。
-        if purity>0.8 or leftFeatresIndexList==[]:
-            currentNode.classLabel = outputData[0]
+        if purity>self.lowerLimitOfPurity or leftFeatresIndexList==[]:
+            currentNode.classLabel = mostLabel
             return currentNode
         else:
             #选择最好的划分属性
