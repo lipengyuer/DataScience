@@ -43,14 +43,25 @@ class ID3DecisionTree():
                 childrenTree = childrenTree.children[featureValue]
         return classLabel  
     
+    def calPurity(self, outputData):
+        labelNumMap = {}
+        for label in outputData:
+            labelNumMap[label] = labelNumMap.get(label, 0) + 1
+        labelNumList = sorted(labelNumMap.items(), key=lambda x: x[1], reverse=True)
+        mostLabel = labelNumList[0][0]
+        purity = labelNumMap[mostLabel]/len(outputData)
+        return purity
+    
     def generateDesisionTree(self, inputData, outputData, currentNode, leftFeatresIndexList):
-        if len(set(outputData))==len(outputData):#决策树生长到这样一个节点时需要停止，停止的基本策略有两种:
+        purity = self.calPurity(outputData)
+#         if len(set(outputData))==len(outputData):#决策树生长到这样一个节点时需要停止，停止的基本策略有两种:
             #(1)在决策树的生长过程中，基于特定的规则停止生长，从而获得精简的决策树——这样的策略叫做预剪枝(Pre-Pruning).
             #(2)对应的，还有一种剪枝策略，称为后剪枝(post-pruning):在决策树完全生长后，再基于特定规则删除不需要的节点。
             #在基本策略的基础上，我们可以组合或者改造出适合场景的各种生长策略
             #这里使用的是预剪枝策略，停止生长的条件非常粗暴，就是“这个节点的特征取值对应的所有样本属于同一个类别”。实际上
             #我们可以构造"纯度"之类的指标，比如某个类别的占比达到60%,这个节点对应的样本就足够纯，停止生长;或者对各个类别加权再计算纯度;
             #或者我们可以计算信息熵;等等。
+        if purity>0.9 or leftFeatresIndexList==[]:
             currentNode.classLabel = outputData[0]
             return currentNode
         else:
@@ -177,7 +188,13 @@ class ID3DecisionTree():
                 node = currentNode.children[featureValue]
                 self.showTreeRecusively(node)
                 print(node.__dict__)
-                
+    def calAccuracy(self, predOutput, realOutput):
+        rightDecisionNum = 0#正确分类的样本数
+        for i in range(len(predOutput)):
+            if predOutput[i] == realOutput[i]:#如果预测的类别和真实类别相同
+                rightDecisionNum += 1.
+        print("分类的准确率是", rightDecisionNum/len(predOutput))
+        
 #基于测试数据检查算法正确性
 def check():
     #获取测试数据https://www.cnblogs.com/kanjian2016/p/7746005.html
@@ -209,17 +226,43 @@ def check():
     clf.chooseBestFeatureWithIG(inputData, leftFeatresIndexList, outputData)
     clf.chooseBestFeatureWithIGR(inputData, leftFeatresIndexList, outputData)
 
+from sklearn.cross_validation import train_test_split
+def checkByIris():
+    with open('iris.data', 'r') as f:
+        lines = f.readlines()
+    inputData = []
+    outputData = []
+    for line in lines:
+        line = line.replace('\n', '')
+        line = line.split(',')
+        outputData.append(line[-1])
+        line = list(map(lambda x: int(round(float(x))), line[:-1]))
+        inputData.append(line)
+    inputList, testInputList, outputList, testOutputList = \
+        train_test_split(inputData, outputData, test_size=0.2)
+    #初始化决策树对象
+    clf = ID3DecisionTree()
+    clf.fit(inputList, outputList)
+    preds = []
+    for i in range(len(testInputList)):
+        pred = clf.predictOne(testInputList[i])
+#         print(pred, outputData[i])   
+        preds.append(pred)
+    print(clf.calAccuracy(preds, testOutputList))
+    
+    
 if __name__ == '__main__':
+    checkByIris()
 #     check()
 
     #特征:体重{1:轻, 2:中等， 3: 重}，身高{1：矮， 2：中等， 3：高}，性别{1: 男， 2：女}
     #类别{1:成年,2:未成年}
     
-    inputData = [[1, 1, 2], [2, 3, 2], [3, 3, 1], [2, 1, 1],[2, 2, 1]]
-    outputData = [2, 1, 1, 1, 1]
-    clf = ID3DecisionTree()
-    clf.fit(inputData, outputData)
-    print(outputData)
-    preds = clf.predictOne(inputData[0])
-    print(preds)
+#     inputData = [[1, 1, 2], [2, 3, 2], [3, 3, 1], [2, 1, 1],[2, 2, 1]]
+#     outputData = [2, 1, 1, 1, 1]
+#     clf = ID3DecisionTree()
+#     clf.fit(inputData, outputData)
+#     print(outputData)
+#     preds = clf.predictOne(inputData[0])
+#     print(preds)
 

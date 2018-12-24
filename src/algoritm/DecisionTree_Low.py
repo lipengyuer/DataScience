@@ -65,10 +65,10 @@ class LowDecisionTree():
                 print(node.__dict__)
     
     def calPurity(self, outputData):
-        labels = set(outputData)
         labelNumMap = {}
-        for label in labels:
+        for label in outputData:
             labelNumMap[label] = labelNumMap.get(label, 0) + 1
+#         print(labels, labelNumMap)
         labelNumList = sorted(labelNumMap.items(), key=lambda x: x[1], reverse=True)
         mostLabel = labelNumList[0][0]
         purity = labelNumMap[mostLabel]/len(outputData)
@@ -84,6 +84,8 @@ class LowDecisionTree():
             #我们可以构造"纯度"之类的指标，比如某个类别的占比达到60%,这个节点对应的样本就足够纯，停止生长;或者对各个类别加权再计算纯度;
             #或者我们可以计算信息熵;等等。
         if purity>0.8 or leftFeatresIndexList==[]:
+            print("纯度是",purity, leftFeatresIndexList)
+            print(outputData)
             currentNode.classLabel = outputData[0]
             return currentNode
         else:
@@ -153,7 +155,37 @@ class LowDecisionTree():
         print(entropyList)
         bestFeatureNO = entropyList[0][0]#取出熵最大的特这个编号并返回
         return bestFeatureNO
+    
+    def calAccuracy(self, predOutput, realOutput):
+        rightDecisionNum = 0#正确分类的样本数
+        for i in range(len(predOutput)):
+            if predOutput[i] == realOutput[i]:#如果预测的类别和真实类别相同
+                rightDecisionNum += 1.
+        print("分类的准确率是", rightDecisionNum/len(predOutput))
 
+from sklearn.cross_validation import train_test_split
+def checkByIris():
+    with open('iris.data', 'r') as f:
+        lines = f.readlines()
+    inputData = []
+    outputData = []
+    for line in lines:
+        line = line.replace('\n', '')
+        line = line.split(',')
+        outputData.append(line[-1])
+        line = list(map(lambda x: int(round(float(x))), line[:-1]))
+        inputData.append(line)
+    inputList, testInputList, outputList, testOutputList = \
+        train_test_split(inputData, outputData, test_size=0.2)
+    #初始化决策树对象
+    clf = LowDecisionTree()
+    clf.fit(inputList, outputList)
+    preds = []
+    for i in range(len(testInputList)):
+        pred = clf.predictOne(testInputList[i])
+        preds.append(pred)
+    print(clf.calAccuracy(preds, testOutputList))
+    
 #基于测试数据检查算法正确性
 def check():
     #获取测试数据https://www.cnblogs.com/kanjian2016/p/7746005.html
@@ -180,13 +212,13 @@ def check():
     
     #初始化决策树对象
     clf = LowDecisionTree()
-    leftFeatresIndexList = list(range(len(inputData[0])))#当前剩余的特征数是全部
     clf.fit(inputData, outputData)
     for i in range(len(inputData)):
         preds = clf.predictOne(inputData[i])
         print(preds, outputData[i])   
+        
 if __name__ == '__main__':
-    check()
+    checkByIris()
 
     #特征:体重{1:轻, 2:中等， 3: 重}，身高{1：矮， 2：中等， 3：高}，性别{1: 男， 2：女}
     #类别{1:成年,2:未成年}
