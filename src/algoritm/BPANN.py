@@ -53,65 +53,54 @@ class BPANN():
             res = np.concatenate((res,np.array([1])))#为截距增加一列取值为1的变量
             res = np.dot(weightMatrix, res)#计算线性组合的结果
             res = self.sigmod(res)#使用sigmod函数进行映射
-#             print(i, res)
             outputOfEachLayer.append(res)
-#         print(outputOfEachLayer)
         return res, outputOfEachLayer
     
     #基于本次计算的输出，以及当前网络参数，逐层计算各个参数对应的梯度
     def calGrad4Weights(self, predOutput, realOutput, outputOfEachLayer ):
-        self.gradsList = [None for _ in range(len(self.layerStruct))]#清空梯度列表
-        self.gradsListPlas = [None for _ in range(len(self.layerStruct))]#清空梯度列表
-        error = predOutput - realOutput#这是最后一层神经元的输出，与真实值的误差。是一个向量
+        self.gradsList = [None for _ in range(len(self.layerStruct))]#存储每一层的神经元与
+        #前一层神经元的连接权重对应的梯度
         
-        #计算最后一层节点与导数第二层节点连接权重的梯度.单独计算的原因是，这部分权重的梯度只考虑一个输出节点，而不是像其他
-        #层一样，考虑后一层的所有梯度
-        weightMatrix = self.weightMatrixList[-1]#取出连接权重矩阵.这个矩阵的一列，是最后一层的一个神经元，与前面一层的
-        #所有神经元的连接权重
-        tempGradMaxtrix = copy.deepcopy(weightMatrix)*0#初始化一个梯度矩阵
-        tempGradMaxtrixPlas = np.ones(tempGradMaxtrix.shape)
-        for j in range(self.layerStruct[-1]):#遍历最后一层神经元的每一个节点
-            tempGradMaxtrix[j, :] = weightMatrix[j, :] * error[j]#每一个节点对应的连接权重，乘以这个节点的输出误差
-            tempGradMaxtrixPlas[j, :] *= error[j]
-            
-        self.gradsListPlas[-1] = tempGradMaxtrixPlas
-        self.gradsListPlas[-2] = tempGradMaxtrix
-        self.gradsList[-1] = tempGradMaxtrix#最后一层神经元的输出对应的误差
-        for i in range(len(self.layerStruct)-2, 0, -1):#从倒数第二层开始，向前遍历每一层神经元
-            gradArrayFromLaterLayer = self.gradsList[i+1]#后面一层的神经元对应的误差;权重列表比神经元层数少1.
-            #这是本层节点与后面一层的所有节点的连接权重矩阵;矩阵的一列，是本层的一个节点与后面一层的所有节点的连接权重
-            weightMatrix = self.weightMatrixList[i-1]#这个是本层神经元与前面一层神经元的连接权重矩阵
-            tempGradMaxtrix = copy.deepcopy(weightMatrix)*0#初始化一个梯度矩阵
-            tempGradMaxtrixPlas = np.ones(tempGradMaxtrix.shape)
-            for n in range(self.layerStruct[i]):#遍历这一层的每一个节点
-                totalErrorFromLaterLayerNode = np.sum(gradArrayFromLaterLayer[:, n])#来自于这个节点相连接的
-                #后一层所有节点传播过来的误差
-                tempGradMaxtrix[n, :] = weightMatrix[n, :]*totalErrorFromLaterLayerNode 
-                tempGradMaxtrixPlas[n, :] *= totalErrorFromLaterLayerNode
-            self.gradsList[i] = tempGradMaxtrix#保留这一层节点与前一层节点的连接权重对应的梯度 
-            self.gradsListPlas[i] = tempGradMaxtrixPlas
-#         print("aaa", self.gradsListPlas)
-#         print('grad1', self.gradsList)
-        self.gradsList = self.gradsListPlas
-        for i in range(1, len(self.gradsListPlas)):#遍历每一层神经元
-            gradMatrix = self.gradsListPlas[i]
-            inputOfThisLayer = outputOfEachLayer[i-1]#这一层神经元的输入
-            outputOfThisNode = outputOfEachLayer[i]
-            inputOfThisLayer = np.concatenate((inputOfThisLayer,np.array([1])))
-            outputOfThisNode = np.concatenate((outputOfThisNode,np.array([1])))
-#             print(gragMatrix)
-#             print(i, inputOfThisLayer)
-            for j in range(len(gradMatrix[0,:])):#遍历上一层的神经元，把每个神经元的输出乘到梯度上
-                gradMatrix[:, j] *= inputOfThisLayer[j]
-            for j in range(len(gradMatrix[:,0])):#遍历这一层的每一个神经元，把每个神经元乘到梯度上
-                gradMatrix[j, :] *= outputOfThisNode[j]
+        self.errorFromLaterLayerNodeList = [None for _ in range(len(self.layerStruct))]#存储反向传播过程中
+        #一个神经元接受的来自后面一层神经元的误差
+        
+        error = predOutput - realOutput#这是最后一层神经元的输出，与真实值的误差。是一个向量
+        self.errorFromLaterLayerNodeList[-1] = error
+        
+        #计算一层节点与之前一层节点连接权重的梯度.并计算这一层节点反向传播给前一层每一个神经元的误差
+        for i in range(len(self.layerStruct)-1, 0, -1):#从后向前遍历每一层神经元
+            nodeNumOfThisLayer = self.layerStruct[i]#这一层节点的个数
+            nodeNumOfFormerLayer = self.layerStruct[i-1]#前一层节点的个数
+            error4EveryNode = self.errorFromLaterLayerNodeList[i]#这是后一层节点传播过来的误差数据
+            weightMatrix4ThisLayer = self.weightMatrixList[i-1]#这一层神经元与前一层神经元的连接权重矩阵
+            #现在计算连接权重对应的梯度
+            inputOfThisLayer = outputOfEachLayer[i-1]#这一层神经元接收到的前一层神经元的输出，也就是这一层的输入
+            outputOfThisLayer = outputOfEachLayer[i]#这一层神经元的输出
+            tempGradMatrix = np.zeros(weightMatrix4ThisLayer.shape)
+#             print("现在计算第", i, "层")
+#             print(error4EveryNode)
+            for j in range(nodeNumOfFormerLayer):#遍历每一个输入
+                for n in range(nodeNumOfThisLayer):#遍历这一层的每一个节点
+                    sumErrorFromFormerLayer = error4EveryNode[n]#前一层神经元传播给这个神经元的误差
+                    tempGradMatrix[n, j] = inputOfThisLayer[j] * outputOfThisLayer[n] *\
+                     (1 - outputOfThisLayer[n]) * sumErrorFromFormerLayer
+            self.gradsList[i] = tempGradMatrix#收集这一层神经元与前一层神经元连接权重的梯度
+
+            #开始计算这一层神经元传播给前一层神经元的误差
+            tempErrorMatrix = copy.deepcopy(weightMatrix4ThisLayer)#存储每个神经元向前传播的误差
+            errorArray4FormerLayer = []
+            for j in range(nodeNumOfThisLayer):#遍历这一层的每一个神经元
+                error4ThisNode = error4EveryNode[j]#取出这个神经元接收得到的来自后一层所有神经元的误差
+                for n in range(nodeNumOfFormerLayer):#遍历前一层的每一个神经元
+                    tempErrorMatrix[j,n] *= error4ThisNode#权重乘以对应的误差
+            for n in range(nodeNumOfFormerLayer):#遍历前一层的每一个神经元
+                error4FormerLayerNode = sum(tempErrorMatrix[:, n])#神经元接收的来自后一层神经元传播的误差
+                errorArray4FormerLayer.append(error4FormerLayerNode)
+            self.errorFromLaterLayerNodeList[i-1] = errorArray4FormerLayer
             
     def updateWeightsWithGrad(self):
-
-#         print('grad2', self.gradsList)
-        for i in range(1, len(self.gradsListPlas)):
-#             print(self.gradsListPlas[i])
-            self.weightMatrixList[i-1] -= self.learningRate * self.gradsListPlas[i]
+        for i in range(1, len(self.gradsList)):
+            self.weightMatrixList[i-1] -= self.learningRate * self.gradsList[i]
     
     
     def calCost(self, predOutput, trainOutput):
@@ -124,7 +113,7 @@ class BPANN():
     def fit(self, trainInput, trainOutput):
         self.initANNWeight(trainInput, trainOutput)
         totalCostList = []
-        for _ in range(self.stepNum):#数据需要学习多次
+        for i in range(self.stepNum):#数据需要学习多次
 #             print(_, "w", self.weightMatrixList[0][0,:])
             totalCost = 0.
             for n in range(0, len(trainInput)):#遍历样本
@@ -132,19 +121,11 @@ class BPANN():
                 thisOutPut = trainOutput[n, :]
 
                 predOutput, outputOfEachLayer = self.predict4Train(thisInput)#基于当前网络参数计算输出
-#                 print('thisInput', thisInput)
-#                 print('thisOutPut', thisOutPut)
-#                 print('outputOfEachLayer', outputOfEachLayer)
-#                 print('oldWeights', self.weightMatrixList)
+
                 totalCost += self.calCost(predOutput, thisOutPut)
                 self.calGrad4Weights(predOutput, thisOutPut, outputOfEachLayer)
                 self.updateWeightsWithGrad()
-#                 print('newWeights', self.weightMatrixList)
-                
-
-#                 print(self.weightMatrixList)
-#                 break
-            print("cost is", totalCost)
+            print('step', i, "cost is", totalCost)
             totalCostList.append(totalCost)
         import matplotlib.pyplot as plt
         plt.plot(totalCostList)
@@ -249,6 +230,3 @@ if __name__ == '__main__':
     model.showConfusionMaxtrix(predList, testOutput)
     
     
-    
-    
-
