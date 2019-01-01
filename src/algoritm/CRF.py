@@ -22,6 +22,7 @@ class LinearChainCRF():
         self.weightOfFeatures =  None#每一个模板函数的权重
         self.featureFunctionNum = None#特征函数的个数
         self.featureFunctionNameIndex = None#存储每一个特征函数在权重向量中的位置
+        self.hiddenStateNameIndex = None#存储每一个状态的序号
         #为了简单，这里暂时不加正则化
 
     #基于模板规则，计算各个特征函数，在各个观测值处的取值
@@ -115,35 +116,75 @@ class LinearChainCRF():
         print("条件概率的分子是", numerator, '分母是',denominator, prob)
         return prob
 
-    #已知CRF参数，以及一个观测序列，计算一个隐藏状态序列的概率
-    def calSecondPartOfGrads(self, stateList, observationList):
-        observationList = '@' + observationList + '@'#为首位和末尾观测值的模板添加占位符号
-        stateList = '*' + stateList+ '#'
-        lengthOfSentence = len(stateList)
-        featureValueArray = self.calFeatureFunctionValueArray4LinearChainCRF(stateList, observationList)
-        numerator = np.exp(sum(self.weightOfFeatures*featureValueArray))
+    def getSumOfFeatureFuctions(self, thisState, formerState, thisObservation):
+        formerState = formerState
+        stateTrans = formerState + thisState
+        stateFeature = formerState + thisObservation
+        featureValue = self.weightOfFeatures[self.hiddenStateNameIndex[stateTrans]] * \
+                       self.ifFitStatTransFeatureTemplet(stateTrans) + \
+                       self.weightOfFeatures[self.hiddenStateNameIndex[stateFeature]] * \
+                       self.ifFitStatTransFeatureTemplet(stateFeature)
+        return featureValue
 
-        #用前向算法，计算分布Z(x)
-        secondPartOfGrads = np.ones(self.hiddenStateNum)#梯度公式中，第二项的取值
-        tempResList = [copy.deepcopy(secondPartOfGrads) for _ in range(lengthOfSentence)]
-        #state序列，对应的特征函数取值和
-        for i in range(1, len(stateList)-1):#遍历每一个观测值和隐藏状态
-            scoreOfLastStep = tempResList[i-1]#上一步一算得到的，各组路径的得分和
-            scoreOfThisStep = tempResList[i]#这一步，各组路径的得分和
-            for j in range(self.hiddenStateNum):#遍历每一个隐藏状态取值
-                thisState = self.hiddenStatList[j]#这个状态的取值
-                for n in range(self.hiddenStateNum):#遍历上一步的所有路径的得分
-                    lastState = self.hiddenStatList[n]#上一步的一个状态的取值
-                    stateTrans = lastState + thisState
-                    stateTransFeatureValue = self.ifFitStatTransFeatureTemplet(stateTrans)
-                    scoreOfThisStep[j] += scoreOfLastStep[n] * np.exp(stateTransFeatureValue)
-                thisObservation = observationList[i]
-                stateFeature = thisState + thisObservation
-                scoreOfThisStep[j] *= np.exp(self.ifFitStatFeatureTemplet(stateFeature))
-        denominator = np.sum(tempResList[-2])
-        prob = numerator/denominator
-        print("条件概率的分子是", numerator, '分母是',denominator, prob)
-        return prob
+    #已知CRF模型参数和一个观测序列x=(x_1, x_2, ..., x_T)，
+    # 求x_t处的前向变量取值aplha_t(thisState)
+    def forwardAlgrithm(self, state_t, observationList, t):
+        alphaList = []#存储前向向量
+        alphaList.append([1])#认为添加的start步，也就是t=0的位置，对应的状态只有一个，前向向量
+        #的长度就是1,特征函数的个数是0,向量元素的取值就是exp(0)=1
+        for i in range(1, t):
+            thisObservation = observationList[i]
+            thisAlpha = np.zeros(self.hiddenStateNum)#t>=1时，隐藏状态的个数
+            formerAlpha = alphaList[-1]
+            stateNumOfFormerStep = len(formerAlpha)
+            for n in range(len(self.hiddenStatList)):#遍历本步的所有隐藏状态
+                thisState = self.hiddenStatList[n]
+                for j in range(stateNumOfFormerStep):
+                    formerState = self.hiddenStateNameIndex[j]
+                    featureFunctionSum = self.getSumOfFeatureFuctions(thisState, formerState, thisObservation)
+                    thisAlpha[n] += np.exp(featureFunctionSum) * formerAlpha[j]
+            alphaList.append(thisAlpha)
+
+        thisState = state_t
+        thisObservation = observationList[t]
+        formerAlpha = alphaList[-1]
+        stateNumOfFormerStep = len(formerAlpha)
+        alpha_t = 0#x_t处，隐藏状态取值为state_t时的前向变量取值
+        for j in range(stateNumOfFormerStep):
+            formerState = self.hiddenStateNameIndex[j]
+            featureFunctionSum = self.getSumOfFeatureFuctions(thisState, formerState, thisObservation)
+            alpha_t += np.exp(featureFunctionSum) * formerAlpha[j]
+        return  alpha_t
+
+    #已知CRF模型参数和一个观测序列x=(x_1, x_2, ..., x_T)，用后向算法
+    # 求x_t处的条件概率p(y_t=s, y_t-1=s_dot|x)
+    def backwardAlgrithm(self,  state_t, observationList, t):
+        betaList = [None for _ in range(len(observationList))]#存储前向向量
+        betaList[-1] = [1]#认为添加的start步，也就是t=0的位置，对应的状态只有一个，前向向量
+        #的长度就是1,特征函数的个数是0,向量元素的取值就是exp(0)=1
+        for i in range(len(observationList) - 2, t+1, -1):
+            thisObservation = observationList[i]
+            thisBeta= np.zeros(self.hiddenStateNum)#t>=1时，隐藏状态的个数
+            formerBeta = betaList[i + 1]
+            stateNumOfFormerStep = len(formerBeta)
+            for n in range(len(self.hiddenStatList)):#遍历本步的所有隐藏状态
+                thisState = self.hiddenStatList[n]
+                for j in range(stateNumOfFormerStep):
+                    formerState = self.hiddenStateNameIndex[j]
+                    featureFunctionSum = self.getSumOfFeatureFuctions(thisState, formerState, thisObservation)
+                    thisBeta[n] += np.exp(featureFunctionSum) * formerBeta[j]
+            betaList[i] = thisBeta
+
+        thisState = state_t
+        thisObservation = observationList[t]
+        formerAlpha = betaList[t+1]
+        stateNumOfFormerStep = len(formerAlpha)
+        beta_t = 0#x_t处，隐藏状态取值为state_t时的前向变量取值
+        for j in range(stateNumOfFormerStep):
+            formerState = self.hiddenStateNameIndex[j]
+            featureFunctionSum = self.getSumOfFeatureFuctions(thisState, formerState, thisObservation)
+            beta_t += np.exp(featureFunctionSum) * formerAlpha[j]
+        return beta_t
 
     #计算模板函数权重对应的梯度
     def calGrad4Weight(self, sentence):
