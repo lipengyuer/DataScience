@@ -55,12 +55,12 @@ class LinearChainCRF():
             if stateTransFeatureNumMap[feature]<2:
                 del stateTransFeatureNumMap[feature]
             else:#出现次数较高的特征，给一个初始权重
-                self.featureWeightMap[feature] = random.uniform(-0.1, 0.1)
+                self.featureWeightMap[feature] = 0*random.uniform(-0.1, 0.1)
         for feature in list(statFeatureNumMap.keys()):
             if statFeatureNumMap[feature]<2:
                 del statFeatureNumMap[feature]
             else:#出现次数较高的特征，给一个初始权重
-                self.featureWeightMap[feature] = random.uniform(-0.1, 0.1)
+                self.featureWeightMap[feature] = 0*random.uniform(-0.1, 0.1)
         self.stateTransFeatureSet = set(list(stateTransFeatureNumMap.keys()))
         self.stateFeatureSet = set(list(statFeatureNumMap.keys()))
         print("特征函数的初始权重是", self.featureWeightMap)
@@ -227,7 +227,7 @@ class LinearChainCRF():
             for featureName in possibleFeatureNames:  
 #                 print(gradMap.get(featureName, 0)) 
                 gradMap[featureName] = gradMap.get(featureName, 0) - \
-                        self.calFeatureFunctionValueAndMargProb(featureName, charList, t)/z_x - \
+                        1*self.calFeatureFunctionValueAndMargProb(featureName, charList, t)/z_x - \
                          gradMap.get(featureName, 0)/(corpusSize * 10)
                 t2 = time.time()
                 tt2 += t2-t1
@@ -238,7 +238,7 @@ class LinearChainCRF():
                 t1 = time.time()
             for featureName in possibleFeatureNames:                
                 gradMap[featureName] = gradMap.get(featureName, 0) - \
-                          self.calFeatureFunctionValueAndMargProb(featureName, charList, t)/z_x - \
+                          1*self.calFeatureFunctionValueAndMargProb(featureName, charList, t)/z_x - \
                           gradMap.get(featureName, 0)/(corpusSize * 10)
                                       
                 t2 = time.time()
@@ -247,7 +247,50 @@ class LinearChainCRF():
 #         print("计算状态特征边缘概率的耗时是", tt2)
 #         print("计算状态转移特征边缘概率的耗时是", tt3)
         return gradMap
-       
+
+    #计算模板函数权重对应的梯度
+    def calGrad4WeightSlow(self, sentence, corpusSize):
+        charList = '@' + sentence[0] + '@'
+        tagList = '*' + sentence[1] + '#'
+        sentenceLength = len(charList)
+        tt1, tt2, tt3 = 0, 0, 0
+        t1 = time.time()
+        z_x = self.backwardAlgrithm('*', charList, 0)#计算配分函数的取值
+        t2 = time.time()
+        tt1 = t2-t1
+        
+        gradMap = {}
+        for featureName in self.featureWeightMap:
+            grad = 0
+            for t in range(1, sentenceLength-1):
+                thisState, formerState = tagList[t], tagList[t-1]
+                thisObservation = charList[t]
+                featureName2 = formerState + thisState
+                featureName1 = thisState + thisObservation
+                grad += self.ifFitFeatureTemplet(featureName1) + self.ifFitFeatureTemplet(featureName2)
+                possibleFeatureNames = self.generatePossibleStateFeatueNames(t, thisObservation)
+                t1 = time.time()
+                for pfeatureName in possibleFeatureNames:
+                    if pfeatureName==featureName:
+    #                 print(gradMap.get(featureName, 0)) 
+                        grad -= 1*self.calFeatureFunctionValueAndMargProb(featureName, charList, t)/z_x + \
+                                 self.featureWeightMap.get(featureName, 0)/(corpusSize * 10)
+                    t2 = time.time()
+                    tt2 += t2-t1
+                possibleFeatureNames = self.generatePossibleStateTrans(t)               
+                for pfeatureName in possibleFeatureNames:
+                    if pfeatureName==featureName: 
+                        grad -= 1*self.calFeatureFunctionValueAndMargProb(featureName, charList, t)/z_x + \
+                                  self.featureWeightMap.get(featureName, 0)/(corpusSize * 10)
+                                          
+                    t2 = time.time()
+                    tt3 += t2-t1
+    #         print("计算配分函数的耗时是", tt1)
+    #         print("计算状态特征边缘概率的耗时是", tt2)
+    #         print("计算状态转移特征边缘概率的耗时是", tt3)
+            gradMap[featureName] = grad
+        return gradMap
+    
     # 基于更新规则更新权重
     def updateWeight(self, gradMap):
         for featureName in gradMap:
@@ -268,7 +311,7 @@ class LinearChainCRF():
                 sentence = sentenceList[n]#遍历语料中的每一句话，训练模型
                 t1 = time.time()
                 self.learningRate = initLearningRate# /(2 * (1 + epoch ))
-                gradMap = self.calGrad4Weight(sentence, corpusSize)#计算模板函数权重对应的梯度
+                gradMap = self.calGrad4WeightSlow(sentence, corpusSize)#计算模板函数权重对应的梯度
                 t2 = time.time()
 #                 print("梯度是", list(gradMap.items()))
 #                 if 'ES' in gradMap:
@@ -304,9 +347,9 @@ class LinearChainCRF():
                 statPath = bestPath
             statPathProbMap[statPath] = statPathProbMapOfThis[statPath]
         bestPath = getKeyWithMaxValueInMap(statPathProbMap)
-        print(len(bestPath) , len(text))
-        for i in range(len(text)):
-            print(bestPath[i], text[i])
+#         print(len(bestPath) , len(text))
+#         for i in range(len(text)):
+#             print(bestPath[i], text[i])
         print(text)
         res = mergeCharsInOneWord(text, bestPath)
         return res
@@ -390,13 +433,14 @@ def loadData(fileName, sentenceNum = 100):
 import time
 if __name__ == '__main__':
     fileName = r"msra_training.txt"
-    sentenceNum = 5
+    sentenceNum = 50
     sentenceList = loadData(fileName, sentenceNum=sentenceNum)#加载语料
 #     print(sentenceList)
-    model = LinearChainCRF(epoch=100, learningRate=0.1)
+    model = LinearChainCRF(epoch=1, learningRate=0.01)
     model.fit(sentenceList)
-    res = model.predict(sentenceList[1][0])
-    print("分词结果是", res, "真实的分词结果是", mergeCharsInOneWord(sentenceList[1][0], sentenceList[1][1]))
+    for i in range(sentenceNum):
+        res = model.predict(sentenceList[i][0])
+        print("分词结果是", res, "真实的分词结果是", mergeCharsInOneWord(sentenceList[i][0], sentenceList[i][1]))
     #
     # s = "我是一个粉刷将，粉刷本领强。我要把我的新房子刷的很漂亮。"
     # res = model.predict(s)
