@@ -66,6 +66,8 @@ class LinearChainCRF():
         print("特征函数的初始权重是", self.featureWeightMap)
         featureNameList = list(self.featureWeightMap.keys())
         self.featureFunctionNum = len(featureNameList)
+        hiddenStateSet.remove('*')
+        hiddenStateSet.remove("#")
         self.hiddenStatList = list(hiddenStateSet)
         self.hiddenStateNum = len(hiddenStateSet)
         print("特征函数的个数是", self.featureFunctionNum)
@@ -165,6 +167,7 @@ class LinearChainCRF():
             featureNames = itertools.product(['*'], self.hiddenStatList)
         else:
             featureNames = itertools.product(self.hiddenStatList, self.hiddenStatList)
+        featureNames = list(map(lambda x: ''.join(x), featureNames))
         featureNames = list(filter(lambda x: x in self.featureWeightMap, featureNames))
         return featureNames
     
@@ -174,6 +177,7 @@ class LinearChainCRF():
             featureNames = itertools.product(['@'], [observation])
         else:
             featureNames = itertools.product(self.hiddenStatList, [observation])
+        featureNames = list(map(lambda x: ''.join(x), featureNames))
         featureNames = list(filter(lambda x: x in self.featureWeightMap, featureNames))
         return featureNames
         
@@ -187,18 +191,23 @@ class LinearChainCRF():
         for t in range(1, sentenceLength-1):
             thisState, formerState = tagList[t], tagList[t-1]
             thisObservation = charList[t]
-            featureName1 = formerState + thisState
+            featureName2 = formerState + thisState
+            featureName1 = thisState + thisObservation
             if featureName1 in self.featureWeightMap:
+                
                 gradMap[featureName1]  = gradMap.get(featureName1, 0) + self.ifFitFeatureTemplet(featureName1)
                 possibleFeatureNames = self.generatePossibleStateFeatueNames(t, thisObservation)
+#                 print(possibleFeatureNames)
                 for featureName in possibleFeatureNames:
+#                     print(featureName, self.calFeatureFunctionValueAndMargProb(featureName, charList, t))
                     gradMap[featureName1] -= self.calFeatureFunctionValueAndMargProb(featureName, charList, t)/z_x
                 
-            featureName2 = thisState + thisObservation
+            
             if featureName2 in self.featureWeightMap:
                 gradMap[featureName2]  = gradMap.get(featureName2, 0) + self.ifFitFeatureTemplet(featureName2)
                 possibleFeatureNames = self.generatePossibleStateTrans(t)
                 for featureName in possibleFeatureNames:
+#                     print(self.calFeatureFunctionValueAndMargProb(featureName, charList, t))
                     gradMap[featureName2] -= self.calFeatureFunctionValueAndMargProb(featureName, charList, t)/z_x                      
             
         return gradMap
@@ -215,13 +224,13 @@ class LinearChainCRF():
     #基于训练语料，估计CRF参数
     def fit(self, sentenceList):
         self.initParamWithTraingData(sentenceList)
-        for _ in range(self.epoch):
+        for epoch in range(self.epoch):
             for sentence in sentenceList:#遍历语料中的每一句话，训练模型
                 gradMap = self.calGrad4Weight(sentence)#计算模板函数权重对应的梯度
     #             print("梯度是", list(gradMap.items()))
                 self.updateWeight(gradMap)#基于更新规则更新权重
     #             print("更新后的权重是", list(self.featureWeightMap.items())[:10])
-                print(self.featureWeightMap['ES'])
+                print("epoch:", epoch, "weight of 'ES':", self.featureWeightMap['ES'])
             
     #基于观测值序列，也就是语句话的字符串列表，使用模型选出最好的隐藏状态序列，并按照分词标记将字符聚合成分词结果
     def predict(self, text): 
