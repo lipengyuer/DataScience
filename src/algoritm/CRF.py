@@ -5,11 +5,11 @@ import copy
 import numpy as np
 import random
 import itertools
+from multiprocessing import Pool
 
 class LinearChainCRF():
     
     def __init__(self, learningRate = 0.001, epoch = 1):
-        self.learningRate = 0.001
         self.epoch = epoch
         #定义CRF的参数
         #特征模板。如果没有设置，就是用使用默认的线性链条件随机场的模板规则，即只考虑当前
@@ -18,7 +18,7 @@ class LinearChainCRF():
         self.minWordNum = None#语料中的词语，出现次数小于这个阈值的，不会用于特征模板
         self.minCharNum = None#语料中的字符，出现次数小于这个阈值的，不会用于模板
         self.gradListOfWeights = None#训练过程中，存储各个模板函数权重的梯度
-        self.learningRate = None#模型训练的学习率，这里为了简单，使用一个统一的
+        self.learningRate = learningRate#模型训练的学习率，这里为了简单，使用一个统一的
         self.hiddenStateNum = None
         self.featureWeightMap =  None#每一个模板函数的权重,为了减小激素啊过程的内存消耗，这里使用map存储
         self.stateTransFeatureSet = None
@@ -88,8 +88,20 @@ class LinearChainCRF():
                                self.backwardAlgrithm(state_t, observationList, t)
         return margProb
             
-            
-
+    def calFeatureFunctionValueAndMargProbPar(self, featureNameList, observationList, t):
+        pool = Pool(4)
+        resList = []
+        res = []
+        for featureName in featureNameList:
+            result = pool.apply_async(self.calFeatureFunctionValueAndMargProb, args = (featureName, \
+                                                                                       observationList,\
+                                                                                       t))
+            resList.append([featureName, result])
+        pool.close() # 关闭进程池，表示不能再往进程池中添加进程，需要在join之前调用
+        pool.join() # 等待进程池中的所有进程执行完毕
+        for result in resList:
+            res.append([result[0], result[1].get()])
+        return res
     #已知模型参数，求一个观测值处的特征函数加权和
     def getSumOfFeatureFuctions(self, thisState, formerState, thisObservation):
         stateTrans = formerState + thisState
@@ -186,30 +198,49 @@ class LinearChainCRF():
         charList = '@' + sentence[0] + '@'
         tagList = '*' + sentence[1] + '#'
         sentenceLength = len(charList)
+        tt1, tt2, tt3 = 0, 0, 0
+        t1 = time.time()
         z_x = self.backwardAlgrithm('*', charList, 0)#计算配分函数的取值
+        t2 = time.time()
+        tt1 = t2-t1
+        
         gradMap = {}
         for t in range(1, sentenceLength-1):
             thisState, formerState = tagList[t], tagList[t-1]
             thisObservation = charList[t]
             featureName2 = formerState + thisState
             featureName1 = thisState + thisObservation
+            possibleFeatureNames = self.generatePossibleStateFeatueNames(t, thisObservation)
             if featureName1 in self.featureWeightMap:
-                
+#                 print("状态特征是", featureName1)
                 gradMap[featureName1]  = gradMap.get(featureName1, 0) + self.ifFitFeatureTemplet(featureName1)
-                possibleFeatureNames = self.generatePossibleStateFeatueNames(t, thisObservation)
-#                 print(possibleFeatureNames)
-                for featureName in possibleFeatureNames:
-#                     print(featureName, self.calFeatureFunctionValueAndMargProb(featureName, charList, t))
-                    gradMap[featureName1] -= self.calFeatureFunctionValueAndMargProb(featureName, charList, t)/z_x
                 
-            
+#                 print(possibleFeatureNames)
+#                 t1 = time.time()
+#                 FeatureFunctionValueAndMargProbList = self.calFeatureFunctionValueAndMargProbPar(possibleFeatureNames, charList, t)
+#                 for line in FeatureFunctionValueAndMargProbList:
+#                     featureName, prob = line[0], line[1]
+#                     gradMap[featureName] = gradMap.get(featureName, 0) - prob/z_x
+#                 t2 = time.time()
+#                 tt2 += t2-t1
+            t1 = time.time()
+            for featureName in possibleFeatureNames:  
+#                 print(gradMap.get(featureName, 0)) 
+                gradMap[featureName] = gradMap.get(featureName, 0) - self.calFeatureFunctionValueAndMargProb(featureName, charList, t)/z_x
+                t2 = time.time()
+                tt2 += t2-t1
+            possibleFeatureNames = self.generatePossibleStateTrans(t)               
             if featureName2 in self.featureWeightMap:
                 gradMap[featureName2]  = gradMap.get(featureName2, 0) + self.ifFitFeatureTemplet(featureName2)
-                possibleFeatureNames = self.generatePossibleStateTrans(t)
-                for featureName in possibleFeatureNames:
-#                     print(self.calFeatureFunctionValueAndMargProb(featureName, charList, t))
-                    gradMap[featureName2] -= self.calFeatureFunctionValueAndMargProb(featureName, charList, t)/z_x                      
-            
+                
+                t1 = time.time()
+            for featureName in possibleFeatureNames:                
+                gradMap[featureName] = gradMap.get(featureName, 0) - self.calFeatureFunctionValueAndMargProb(featureName, charList, t)/z_x                      
+                t2 = time.time()
+                tt3 += t2-t1
+#         print("计算配分函数的耗时是", tt1)
+#         print("计算状态特征边缘概率的耗时是", tt2)
+#         print("计算状态转移特征边缘概率的耗时是", tt3)
         return gradMap
        
     # 基于更新规则更新权重
@@ -217,7 +248,7 @@ class LinearChainCRF():
         for featureName in gradMap:
 #             print(self.featureWeightMap.keys())
             if featureName in self.featureWeightMap:
-                self.featureWeightMap[featureName] -= 0.01 * gradMap[featureName]
+                self.featureWeightMap[featureName] -= self.learningRate * gradMap[featureName]
 #             else:
 #                 print(featureName)
 
@@ -226,11 +257,17 @@ class LinearChainCRF():
         self.initParamWithTraingData(sentenceList)
         for epoch in range(self.epoch):
             for sentence in sentenceList:#遍历语料中的每一句话，训练模型
+                t1 = time.time()
                 gradMap = self.calGrad4Weight(sentence)#计算模板函数权重对应的梯度
-    #             print("梯度是", list(gradMap.items()))
+                t2 = time.time()
+#                 print("梯度是", list(gradMap.items()))
+#                 if 'ES' in gradMap:
+#                     print("grad is", gradMap['ES'])
                 self.updateWeight(gradMap)#基于更新规则更新权重
+                
+                t3 = time.time()
     #             print("更新后的权重是", list(self.featureWeightMap.items())[:10])
-                print("epoch:", epoch, "weight of 'ES':", self.featureWeightMap['ES'])
+                print(self.learningRate, "epoch:", epoch, "weight of 'ES':", self.featureWeightMap['ES'], 'time cost:',t2-t1, t3-t2)
             
     #基于观测值序列，也就是语句话的字符串列表，使用模型选出最好的隐藏状态序列，并按照分词标记将字符聚合成分词结果
     def predict(self, text): 
@@ -319,7 +356,8 @@ def loadData(fileName, sentenceNum = 100):
 #                 if "习近平" in tempSentence:
 #                     print(tempSentence)
                 tempTag = ''.join(tempTag)
-                corpus.append([tempSentence,tempTag])
+#                 corpus.append([tempSentence,tempTag])
+                corpus.append([tempSentence[:10],tempTag[:10]])
 #                 print("这句话是", [tempSentence,tempTag])
                 tempSentence = []
                 tempTag = []
@@ -341,7 +379,7 @@ if __name__ == '__main__':
     sentenceNum = 50
     sentenceList = loadData(fileName, sentenceNum=sentenceNum)#加载语料
 #     print(sentenceList)
-    model = LinearChainCRF(epoch=10)
+    model = LinearChainCRF(epoch=10, learningRate=0.1)
     model.fit(sentenceList)
 #     print("一个隐藏状态序列的概率是",
 #           sentenceList[0],
