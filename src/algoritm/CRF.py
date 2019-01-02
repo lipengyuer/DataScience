@@ -194,7 +194,7 @@ class LinearChainCRF():
         return featureNames
         
     #计算模板函数权重对应的梯度
-    def calGrad4Weight(self, sentence):
+    def calGrad4Weight(self, sentence, corpusSize):
         charList = '@' + sentence[0] + '@'
         tagList = '*' + sentence[1] + '#'
         sentenceLength = len(charList)
@@ -226,7 +226,9 @@ class LinearChainCRF():
             t1 = time.time()
             for featureName in possibleFeatureNames:  
 #                 print(gradMap.get(featureName, 0)) 
-                gradMap[featureName] = gradMap.get(featureName, 0) - self.calFeatureFunctionValueAndMargProb(featureName, charList, t)/z_x
+                gradMap[featureName] = gradMap.get(featureName, 0) - \
+                        self.calFeatureFunctionValueAndMargProb(featureName, charList, t)/z_x - \
+                         gradMap.get(featureName, 0)/(corpusSize * 10)
                 t2 = time.time()
                 tt2 += t2-t1
             possibleFeatureNames = self.generatePossibleStateTrans(t)               
@@ -235,7 +237,10 @@ class LinearChainCRF():
                 
                 t1 = time.time()
             for featureName in possibleFeatureNames:                
-                gradMap[featureName] = gradMap.get(featureName, 0) - self.calFeatureFunctionValueAndMargProb(featureName, charList, t)/z_x                      
+                gradMap[featureName] = gradMap.get(featureName, 0) - \
+                          self.calFeatureFunctionValueAndMargProb(featureName, charList, t)/z_x - \
+                          gradMap.get(featureName, 0)/(corpusSize * 10)
+                                      
                 t2 = time.time()
                 tt3 += t2-t1
 #         print("计算配分函数的耗时是", tt1)
@@ -255,10 +260,15 @@ class LinearChainCRF():
     #基于训练语料，估计CRF参数
     def fit(self, sentenceList):
         self.initParamWithTraingData(sentenceList)
+        corpusSize = len(sentenceList)
+        weightList = []
+        initLearningRate = float(self.learningRate)
         for epoch in range(self.epoch):
-            for sentence in sentenceList:#遍历语料中的每一句话，训练模型
+            for n in range(corpusSize):
+                sentence = sentenceList[n]#遍历语料中的每一句话，训练模型
                 t1 = time.time()
-                gradMap = self.calGrad4Weight(sentence)#计算模板函数权重对应的梯度
+                self.learningRate = initLearningRate# /(2 * (1 + epoch ))
+                gradMap = self.calGrad4Weight(sentence, corpusSize)#计算模板函数权重对应的梯度
                 t2 = time.time()
 #                 print("梯度是", list(gradMap.items()))
 #                 if 'ES' in gradMap:
@@ -266,34 +276,38 @@ class LinearChainCRF():
                 self.updateWeight(gradMap)#基于更新规则更新权重
                 
                 t3 = time.time()
-    #             print("更新后的权重是", list(self.featureWeightMap.items())[:10])
-                print(self.learningRate, "epoch:", epoch, "weight of 'ES':", self.featureWeightMap['ES'], 'time cost:',t2-t1, t3-t2)
-            
+#                 print("更新后的权重是", list(self.featureWeightMap.items())[:10])
+                print(self.learningRate, "epoch:", epoch, 'sentence', n, "weight of 'ES':", self.featureWeightMap['ES'])#, 'time cost:',t2-t1, t3-t2)
+                weightList.append(self.featureWeightMap['ES'])
+        from matplotlib import pyplot as plt
+        plt.plot(weightList)
+        plt.show()
     #基于观测值序列，也就是语句话的字符串列表，使用模型选出最好的隐藏状态序列，并按照分词标记将字符聚合成分词结果
     def predict(self, text): 
         statPathProbMap = {}#存储以各个初始状态打头的概率最大stat路径
-        for stat in self.initStatProbDist:#遍历每一个初始状态
+        for stat in self.hiddenStatList:#遍历每一个隐藏状态
             statPath = stat#这是目前积累到的stat路径，也就是分词标记序列
-            firstChar = text[0]
-            conditionProbOfThisChar = self.charProbDistOfEachStat[stat].get(firstChar, 0.000001)
-            statPathProb = self.initStatProbDist[stat] * conditionProbOfThisChar
+            statPathProb = self.getSumOfFeatureFuctions(stat, '*', text[0])
             statPathProbMapOfThis = {}
             statPathProbMapOfThis[statPath] = statPathProb
-            for i in range(1, len(text)):
-                char  = text[i]
+            for t in range(1, len(text)):
+                char  = text[t]
                 tempPathProbMap = {}
-                for statValue in self.statValueSet:
-                    tempStatPath = statPath + statValue
-                    statTrans = statPath[-1] + statValue
-                    tempPathProb = statPathProbMapOfThis[statPath]* \
-                           self.statTransProbMap.get(statTrans, 0.01)*\
-                           self.charProbDistOfEachStat[statValue].get(char, 0.000001)
-                    tempPathProbMap[tempStatPath] = tempPathProb
+                for statValue in self.hiddenStatList:
+                    thisState = statValue
+                    formerState = statPath[-1]
+                    tempPath = statPath + thisState
+                    tempPathProb = self.getSumOfFeatureFuctions(thisState, formerState, char)
+                    tempPathProbMap[tempPath] = tempPathProb
                 bestPath = getKeyWithMaxValueInMap(tempPathProbMap)
                 statPathProbMapOfThis[bestPath] = tempPathProbMap[bestPath]
                 statPath = bestPath
             statPathProbMap[statPath] = statPathProbMapOfThis[statPath]
         bestPath = getKeyWithMaxValueInMap(statPathProbMap)
+        print(len(bestPath) , len(text))
+        for i in range(len(text)):
+            print(bestPath[i], text[i])
+        print(text)
         res = mergeCharsInOneWord(text, bestPath)
         return res
                     
@@ -356,8 +370,8 @@ def loadData(fileName, sentenceNum = 100):
 #                 if "习近平" in tempSentence:
 #                     print(tempSentence)
                 tempTag = ''.join(tempTag)
-#                 corpus.append([tempSentence,tempTag])
-                corpus.append([tempSentence[:10],tempTag[:10]])
+                corpus.append([tempSentence,tempTag])
+#                 corpus.append([tempSentence[:20],tempTag[:20]])
 #                 print("这句话是", [tempSentence,tempTag])
                 tempSentence = []
                 tempTag = []
@@ -376,17 +390,13 @@ def loadData(fileName, sentenceNum = 100):
 import time
 if __name__ == '__main__':
     fileName = r"msra_training.txt"
-    sentenceNum = 50
+    sentenceNum = 5
     sentenceList = loadData(fileName, sentenceNum=sentenceNum)#加载语料
 #     print(sentenceList)
-    model = LinearChainCRF(epoch=10, learningRate=0.1)
+    model = LinearChainCRF(epoch=100, learningRate=0.1)
     model.fit(sentenceList)
-#     print("一个隐藏状态序列的概率是",
-#           sentenceList[0],
-#           model.calConditionalProbOfStates(sentenceList[0][1],
-#                                                            sentenceList[0][0]))
-    # res = model.predict(sentenceList[10][0])
-    # print("分词结果是", res, "真实的分词结果是", )
+    res = model.predict(sentenceList[1][0])
+    print("分词结果是", res, "真实的分词结果是", mergeCharsInOneWord(sentenceList[1][0], sentenceList[1][1]))
     #
     # s = "我是一个粉刷将，粉刷本领强。我要把我的新房子刷的很漂亮。"
     # res = model.predict(s)
