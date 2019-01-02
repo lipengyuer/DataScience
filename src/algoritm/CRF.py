@@ -6,7 +6,7 @@ import numpy as np
 import random
 import itertools
 from multiprocessing import Pool
-
+import pickle
 class LinearChainCRF():
     
     def __init__(self, learningRate = 0.001, epoch = 1):
@@ -52,12 +52,12 @@ class LinearChainCRF():
                 stateTransFeatureNumMap[statTransFeature] = stateTransFeatureNumMap.get(statTransFeature, 0) + 1
                 statFeatureNumMap[statFeature] = statFeatureNumMap.get(statFeature, 0) + 1
         for feature in list(stateTransFeatureNumMap.keys()):
-            if stateTransFeatureNumMap[feature]<2:
+            if stateTransFeatureNumMap[feature]<5:
                 del stateTransFeatureNumMap[feature]
             else:#出现次数较高的特征，给一个初始权重
                 self.featureWeightMap[feature] = 0*random.uniform(-0.1, 0.1)
         for feature in list(statFeatureNumMap.keys()):
-            if statFeatureNumMap[feature]<2:
+            if statFeatureNumMap[feature]<5:
                 del statFeatureNumMap[feature]
             else:#出现次数较高的特征，给一个初始权重
                 self.featureWeightMap[feature] = 0*random.uniform(-0.1, 0.1)
@@ -296,7 +296,7 @@ class LinearChainCRF():
         for featureName in gradMap:
 #             print(self.featureWeightMap.keys())
             if featureName in self.featureWeightMap:
-                self.featureWeightMap[featureName] -= self.learningRate * gradMap[featureName]
+                self.featureWeightMap[featureName] += self.learningRate * gradMap[featureName]
 #             else:
 #                 print(featureName)
 
@@ -306,22 +306,30 @@ class LinearChainCRF():
         corpusSize = len(sentenceList)
         weightList = []
         initLearningRate = float(self.learningRate)
+        weight1, weight2 = 0, 0
         for epoch in range(self.epoch):
+            pickle.dump(self, open('md.pkl', 'wb'))
             for n in range(corpusSize):
+                weight1 = self.featureWeightMap['ES']
                 sentence = sentenceList[n]#遍历语料中的每一句话，训练模型
                 t1 = time.time()
-                self.learningRate = initLearningRate# /(2 * (1 + epoch ))
+                self.learningRate = initLearningRate /(2 * (1 + epoch ))
                 gradMap = self.calGrad4WeightSlow(sentence, corpusSize)#计算模板函数权重对应的梯度
                 t2 = time.time()
 #                 print("梯度是", list(gradMap.items()))
 #                 if 'ES' in gradMap:
 #                     print("grad is", gradMap['ES'])
                 self.updateWeight(gradMap)#基于更新规则更新权重
-                
+                weight2 = self.featureWeightMap['ES']
                 t3 = time.time()
 #                 print("更新后的权重是", list(self.featureWeightMap.items())[:10])
                 print(self.learningRate, "epoch:", epoch, 'sentence', n, "weight of 'ES':", self.featureWeightMap['ES'])#, 'time cost:',t2-t1, t3-t2)
                 weightList.append(self.featureWeightMap['ES'])
+            if np.isnan(self.featureWeightMap['ES'])==True or  np.abs(weight2-weight1)>10:
+                print(np.isnan(self.featureWeightMap['ES']))
+                break
+
+
         from matplotlib import pyplot as plt
         plt.plot(weightList)
         plt.show()
@@ -424,19 +432,21 @@ def loadData(fileName, sentenceNum = 100):
             else:
                 line= line.split('\t')
 #                 print(line)
-                [char, tag] = line[0], line[2]#取出语料的文字和分词标记
+                [char, tag] = line[0], line[1]#取出语料的文字和分词标记
                 tempSentence.append(char)
                 tempTag.append(tag)
             line = f.readline()
     return corpus
                       
 import time
+
 if __name__ == '__main__':
-    fileName = r"msra_training.txt"
-    sentenceNum = 50
+    fileName = r"trainingCorpus4wordSeg_part.txt"
+    sentenceNum = 100
     sentenceList = loadData(fileName, sentenceNum=sentenceNum)#加载语料
 #     print(sentenceList)
-    model = LinearChainCRF(epoch=1, learningRate=0.01)
+    model = LinearChainCRF(epoch=10, learningRate=0.0001)
+    random.shuffle(sentenceList)
     model.fit(sentenceList)
     for i in range(sentenceNum):
         res = model.predict(sentenceList[i][0])
