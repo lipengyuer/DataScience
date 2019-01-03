@@ -74,18 +74,12 @@ class LinearChainCRF():
 
     #计算观测序列t处，某个特征函数的取值，以及对应的边缘概率，为计算梯度做准备
     def calFeatureFunctionValueAndMargProb(self, featureName, observationList, t):
-        margProb = 0
-        if featureName in self.stateFeatureSet:#如果是状态特征
-            state_t = featureName[0]#状态特征的name的第一位是stat_t, 第二位是x_t
-            margProb = self.forwardAlgrithm(state_t, observationList, t) * \
-                               self.backwardAlgrithm(state_t, observationList, t)
-        elif featureName in self.stateTransFeatureSet:#如果是状态转移特征
-            observation_t = observationList[t]
-            state_t = featureName[1]
-            stateFormer = featureName[0]
-            margProb = self.forwardAlgrithm(stateFormer, observationList, t-1) * \
-                             self.getSumOfFeatureFuctions(state_t, stateFormer, observation_t) * \
-                               self.backwardAlgrithm(state_t, observationList, t)
+        observation_t = observationList[t]
+        state_t = featureName[1]
+        stateFormer = featureName[0]
+        margProb = self.forwardAlgrithm(stateFormer, observationList, t-1) * \
+                         self.getSumOfFeatureFuctions(state_t, stateFormer, observation_t) * \
+                           self.backwardAlgrithm(state_t, observationList, t)
         return margProb
             
     def calFeatureFunctionValueAndMargProbPar(self, featureNameList, observationList, t):
@@ -278,7 +272,6 @@ class LinearChainCRF():
                 possibleFeatureNames = self.generatePossibleStateFeatueNames(t, thisObservation)
                 t1 = time.time()
                 if featureName in possibleFeatureNames:
-    #                 print(gradMap.get(featureName, 0)) 
                     grad -= 1*self.calFeatureFunctionValueAndMargProb(featureName, charList, t)/z_x + \
                                  self.featureWeightMap.get(featureName, 0)/(corpusSize * 10)
                     t2 = time.time()
@@ -301,7 +294,7 @@ class LinearChainCRF():
         for featureName in gradMap:
 #             print(self.featureWeightMap.keys())
             if featureName in self.featureWeightMap:
-                self.featureWeightMap[featureName] += self.learningRate * gradMap[featureName]
+                self.featureWeightMap[featureName] -= self.learningRate * gradMap[featureName]
 #             else:
 #                 print(featureName)
 
@@ -329,16 +322,31 @@ class LinearChainCRF():
                 weight2 = self.featureWeightMap['ES']
                 t3 = time.time()
 #                 print("更新后的权重是", list(self.featureWeightMap.items())[:10])
-                print(self.learningRate, "epoch:", epoch, 'sentence', n, "weight of 'ES':", self.featureWeightMap['ES'], 'time cost:',t2-t1, t3-t2)
+#                 print(self.learningRate, "epoch:", epoch, 'sentence', n, "weight of 'ES':", self.featureWeightMap['ES'], 'time cost:',t2-t1, t3-t2)
                 weightList.append(self.featureWeightMap['ES'])
             if np.isnan(self.featureWeightMap['ES'])==True or  np.abs(weight2-weight1)>10:
                 print(np.isnan(self.featureWeightMap['ES']))
                 break
-
+            cost = self.calCost(sentenceList[:corpusSize])
+            print("epoch:", epoch, 'sentence', epoch, 'cost:', cost, "weight of 'ES':", self.featureWeightMap['ES'])
 
         from matplotlib import pyplot as plt
         plt.plot(weightList)
         plt.show()
+
+    def calCost(self, sentenceList):
+        cost = 0
+        for sentence in sentenceList:
+            charList = '@' + sentence[0] + '@'
+            tagList = '*' + sentence[1] + '#'
+            for t in range(1, len(charList)):
+                thisState = tagList[t]
+                formerState = tagList[t-1]
+                thisObservation = charList[t]
+                cost += self.getSumOfFeatureFuctions(thisState, formerState, thisObservation)
+            z_x = self.backwardAlgrithm('*', charList, 0)#计算配分函数的取值
+            cost = z_x - cost
+        return cost
     #基于观测值序列，也就是语句话的字符串列表，使用模型选出最好的隐藏状态序列，并按照分词标记将字符聚合成分词结果
     def predict(self, text): 
         statPathProbMap = {}#存储以各个初始状态打头的概率最大stat路径
@@ -393,27 +401,6 @@ def mergeCharsInOneWord(charList, tagList):
         else:
             word += char
     return wordList
-                
-    
-dataStr = """
-我 S
-喜 B
-欢 E
-吃 S
-好 B
-吃 M
-的 E
-， W
-因 B
-为 E
-这 B
-些 E
-东 B
-西 E
-好 B
-吃 E
-。
-"""
 
 def loadData(fileName, sentenceNum = 100):
     with open(fileName, 'r', encoding='utf8') as f:
@@ -440,7 +427,7 @@ def loadData(fileName, sentenceNum = 100):
             else:
                 line= line.split('\t')
 #                 print(line)
-                [char, tag] = line[0], line[2]#取出语料的文字和分词标记
+                [char, tag] = line[0], line[1]#取出语料的文字和分词标记
                 tempSentence.append(char)
                 tempTag.append(tag)
             line = f.readline()
@@ -449,16 +436,16 @@ def loadData(fileName, sentenceNum = 100):
 import time
 
 if __name__ == '__main__':
-    fileName = r"msra_training.txt"
-    sentenceNum = 500
+    fileName = r"trainingCorpus4wordSeg_part.txt"
+    sentenceNum = 5
     sentenceList = loadData(fileName, sentenceNum=sentenceNum)#加载语料
 #     print(sentenceList)
-    preTrain = True#False#,True
+    preTrain = False#False#,True
     if preTrain:
         model = pickle.load(open('md.pkl', 'rb'))
         model.setMode(preTrain=True)
     else:
-        model = LinearChainCRF(epoch=1, learningRate=0.0001)
+        model = LinearChainCRF(epoch=100, learningRate=0.01)
         model.setMode(preTrain=False)
     
     random.shuffle(sentenceList)
