@@ -253,7 +253,7 @@ class LinearChainCRF():
             for n in range(batchSize):
                 weight1 = self.featureWeightMap['ES']
                 sentence = sentenceList[n]#遍历语料中的每一句话，训练模型
-                result = pool.apply_async(calGrad4WeightSlowMultiProcess, args=(self, sentence, batchSize, n))
+                result = pool.apply_async(calGrad4WeightSlowMultiProcessNew, args=(self, sentence, batchSize, n))
                 gradsList.append(result)
             pool.close()
             pool.join()
@@ -414,6 +414,8 @@ def calGrad4WeightSlowMultiProcess(self, sentence, corpusSize, n):
     for state in self.stateFeatureSet:
         z_x += self.backwardAlgrithm(state, charList, 1)#计算配分函数的取值
     gradMap = {}
+    
+    regFenmu = corpusSize * 10
     for featureName in self.featureWeightMap:
         grad = 0
         for t in range(1, sentenceLength-1):
@@ -424,19 +426,48 @@ def calGrad4WeightSlowMultiProcess(self, sentence, corpusSize, n):
             grad += self.ifFitFeatureTemplet(featureName1) + self.ifFitFeatureTemplet(featureName2)
             possibleFeatureNames = self.generatePossibleStateFeatueNames(t, thisObservation)
             if featureName in possibleFeatureNames:
-                grad += -1*self.calFeatureFunctionValueAndMargProb(featureName, charList, t)/z_x - \
-                             self.featureWeightMap.get(featureName, 0)/(corpusSize * 10)
+                grad += -self.calFeatureFunctionValueAndMargProb(featureName, charList, t)/z_x - \
+                             self.featureWeightMap.get(featureName, 0)/regFenmu
             possibleFeatureNames = self.generatePossibleStateTrans(t)               
             if featureName in possibleFeatureNames:
-                grad += -1*self.calFeatureFunctionValueAndMargProb(featureName, charList, t)/z_x - \
-                              self.featureWeightMap.get(featureName, 0)/(corpusSize * 10)
+                grad += -self.calFeatureFunctionValueAndMargProb(featureName, charList, t)/z_x - \
+                              self.featureWeightMap.get(featureName, 0)/regFenmu
                                       
 #         print("计算配分函数的耗时是", tt1)
 #         print("计算状态特征边缘概率的耗时是", tt2)
 #         print("计算状态转移特征边缘概率的耗时是", tt3)
         gradMap[featureName] = grad
     return gradMap
-    
+
+def calGrad4WeightSlowMultiProcessNew(self, sentence, corpusSize, n):
+#     print("这是第", n, '句。')
+    charList = '@' + sentence[0] + '@'
+    tagList = '*' + sentence[1] + '#'
+    sentenceLength = len(charList)
+    z_x = 0
+    for state in self.stateFeatureSet:
+        z_x += self.backwardAlgrithm(state, charList, 1)#计算配分函数的取值
+    gradMap = {}
+    featureName = None
+    regFenmu = corpusSize * 10
+    for t in range(1, sentenceLength-1):
+        thisState, formerState = tagList[t], tagList[t-1]
+        thisObservation = charList[t]
+        featureName2 = formerState + thisState
+        featureName1 = thisState + thisObservation
+        gradMap[featureName2] = gradMap.get(featureName2, 0) + self.ifFitFeatureTemplet(featureName2)
+        gradMap[featureName1] = gradMap.get(featureName1, 0) + self.ifFitFeatureTemplet(featureName1)
+        
+        possibleFeatureNames = self.generatePossibleStateFeatueNames(t, thisObservation)
+        if featureName in possibleFeatureNames:
+            gradMap[featureName] = gradMap.get(featureName, 0)-self.calFeatureFunctionValueAndMargProb(featureName, charList, t)/z_x - \
+                         self.featureWeightMap.get(featureName, 0)/regFenmu
+        possibleFeatureNames = self.generatePossibleStateTrans(t)               
+        if featureName in possibleFeatureNames:
+            gradMap[featureName] = gradMap.get(featureName, 0)-self.calFeatureFunctionValueAndMargProb(featureName, charList, t)/z_x - \
+                         self.featureWeightMap.get(featureName, 0)/regFenmu
+    return gradMap
+ 
 import time
 
 if __name__ == '__main__':
@@ -444,19 +475,20 @@ if __name__ == '__main__':
     sentenceNum = 100
     sentenceList = loadData(fileName, sentenceNum=sentenceNum)#加载语料
 #     print(sentenceList)
-    preTrain = True#False#,True
+    preTrain = False#False#,True
     if preTrain:
         model = pickle.load(open('md.pkl', 'rb'))
         model.setMode(preTrain=True)
+        model.learningRate = 0.001
     else:
-        model = LinearChainCRF(epoch=200, learningRate=0.0001, workerNum=10)
+        model = LinearChainCRF(epoch=200, learningRate=0.001, workerNum=10)
         model.setMode(preTrain=False)
     
     
     model.fitMulti(sentenceList)
     random.shuffle(sentenceList)
     pickle.dump(model, open('md.pkl', 'wb'))
-    for i in range(10):
+    for i in range(100):
         res = model.predict(sentenceList[i][0])
         print("分词结果是", res, "真实的分词结果是", mergeCharsInOneWord(sentenceList[i][0], sentenceList[i][1]))
     #
