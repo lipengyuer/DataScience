@@ -94,12 +94,12 @@ class LinearChainCRF():
                 stateTransFeatureNumMap[statTransFeature] = stateTransFeatureNumMap.get(statTransFeature, 0) + 1
                 statFeatureNumMap[statFeature] = statFeatureNumMap.get(statFeature, 0) + 1
         for feature in list(stateTransFeatureNumMap.keys()):
-            if stateTransFeatureNumMap[feature] < 3:
+            if stateTransFeatureNumMap[feature] < 1:
                 del stateTransFeatureNumMap[feature]
             else:  # 出现次数较高的特征，给一个初始权重
-                self.featureWeightMap[feature] = random.uniform(-0.1, 0.1)
+                self.featureWeightMap[feature] = 0*random.uniform(-0.1, 0.1)
         for feature in list(statFeatureNumMap.keys()):
-            if statFeatureNumMap[feature] < 3:
+            if statFeatureNumMap[feature] < 1:
                 del statFeatureNumMap[feature]
             else:  # 出现次数较高的特征，给一个初始权重
                 self.featureWeightMap[feature] = 0 * random.uniform(-0.1, 0.1)
@@ -231,7 +231,8 @@ class LinearChainCRF():
     def fitMulti(self, sentenceList):
         if self.preTrain == False:
             self.initParamWithTraingData(sentenceList)
-        batchSize = int(len(sentenceList)/self.workerNum)
+        batchSize = 20
+        miniBatchSize = 3
         corpusSize = len(sentenceList)
         weightList = []
         initLearningRate = float(self.learningRate)
@@ -240,33 +241,35 @@ class LinearChainCRF():
         for epoch in range(self.epoch):
             t1 = time.time()
             random.shuffle(sentenceList)
-            pool = Pool(self.workerNum)
-            gradsList = []
-            pickle.dump(self, open('md.pkl', 'wb'))
             for n in range(0, len(sentenceList), batchSize):
                 dataBatch = sentenceList[n: n+batchSize]
-                weight1 = self.featureWeightMap['ES']
-                result = pool.apply_async(calGrad4WeightSlowMultiProcessNew, args=(self, dataBatch, corpusSize, epoch, n))
-                gradsList.append(result)
-            pool.close()
-            pool.join()
-            print("开始本轮的梯度计算和权重更新。")
-            for result in gradsList:
-                gradMap = result.get()
-                self.learningRate = initLearningRate / (2 * (1 + epoch))
-                self.updateWeight(gradMap)  # 基于更新规则更新权重
-                weight2 = self.featureWeightMap['ES']
-            cost = self.calCost(sentenceList[:batchSize])
-            t2 = time.time()
-            print("epoch:", epoch, ',sentence', n, ',cost:', cost, ",weight of 'ES':", self.featureWeightMap['ES'], ',time cost is', t2-t1)
-            weightList.append(self.featureWeightMap['ES'])
+                pool = Pool(self.workerNum)
+                gradsList = []
+                pickle.dump(self, open('md.pkl', 'wb'))
+                for j in range(0, batchSize, miniBatchSize):
+                    miniBatch = dataBatch[j:j+miniBatchSize]
+                    weight1 = self.featureWeightMap['ES']
+                    result = pool.apply_async(calGrad4WeightSlowMultiProcessNew, args=(self, miniBatch, batchSize, epoch, n))
+                    gradsList.append(result)
+                pool.close()
+                pool.join()
+                print("开始本轮的梯度计算和权重更新。")
+                for result in gradsList:
+                    gradMap = result.get()
+                    self.learningRate = initLearningRate / (2 * (1 + epoch))
+                    self.updateWeight(gradMap)  # 基于更新规则更新权重
+                    weight2 = self.featureWeightMap['ES']
+                cost = self.calCost(sentenceList[:batchSize])
+                t2 = time.time()
+                print("epoch:", epoch, ',sentence', n, ',cost:', cost, ",weight of 'ES':", self.featureWeightMap['ES'], ',time cost is', t2-t1)
+                weightList.append(self.featureWeightMap['ES'])
             if np.isnan(self.featureWeightMap['ES']) == True or np.abs(weight2 - weight1) > 10:
                 print(np.isnan(self.featureWeightMap['ES']))
                 break
 
-        from matplotlib import pyplot as plt
-        plt.plot(weightList)
-        plt.show()
+#         from matplotlib import pyplot as plt
+#         plt.plot(weightList)
+#         plt.show()
 
     def calCost(self, sentenceList):
         cost = 0
@@ -363,41 +366,45 @@ def loadData(fileName, sentenceNum=100):
             else:
                 line = line.split('	')
                 # print(line)
-                [char, tag] = line[0], line[1]  # 取出语料的文字和分词标记
+                [char, tag] = line[0], line[2]  # 取出语料的文字和分词标记
                 tempSentence.append(char)
                 tempTag.append(tag)
             line = f.readline()
     return corpus
 
 
-def calGrad4WeightSlowMultiProcess(self, sentence, corpusSize, n):
-    #     print("这是第", n, '句。')
-    charList = '@' + sentence[0] + '@'
-    tagList = '*' + sentence[1] + '#'
-    sentenceLength = len(charList)
-    z_x = 0
-    for state in self.stateFeatureSet:
-        z_x += self.backwardAlgrithm(state, charList, 1)  # 计算配分函数的取值
+def calGrad4WeightSlowMultiProcess(self, dataBatch, corpusSize, epoch, n):
+    print("第", epoch, '轮，进度是', n, '/', corpusSize)
     gradMap = {}
-
-    regFenmu = corpusSize * 10
-    for featureName in self.featureWeightMap:
-        grad = 0
-        for t in range(1, sentenceLength - 1):
-            thisState, formerState = tagList[t], tagList[t - 1]
-            thisObservation = charList[t]
-            featureName2 = formerState + thisState
-            featureName1 = thisState + thisObservation
-            if featureName in [featureName2, featureName1]:
-                grad += 1
-            possibleFeatureNames = self.generatePossibleStateFeatueNames(t, thisObservation) + \
-                                   self.generatePossibleStateTrans(t, tagList, charList)
-            if featureName in possibleFeatureNames:
-                grad = grad - self.calFeatureFunctionValueAndMargProb(featureName, charList, t) / z_x
-        gradMap[featureName] = grad
-    for key in gradMap:
-        if key in self.featureWeightMap:
-            gradMap[key] -= self.featureWeightMap.get(key, 0) / regFenmu
+    # process_bar = ShowProcess(len(dataBatch), 'OK')
+    for sentence in dataBatch:
+        #     print("这是第", n, '句。')
+        charList = '@' + sentence[0] + '@'
+        tagList = '*' + sentence[1] + '#'
+        sentenceLength = len(charList)
+        z_x = 0
+        for state in self.stateFeatureSet:
+            z_x += self.backwardAlgrithm(state, charList, 1)  # 计算配分函数的取值
+        gradMap = {}
+    
+        regFenmu = corpusSize * 10
+        for featureName in self.featureWeightMap:
+            grad = 0
+            for t in range(1, sentenceLength - 1):
+                thisState, formerState = tagList[t], tagList[t - 1]
+                thisObservation = charList[t]
+                featureName2 = formerState + thisState
+                featureName1 = thisState + thisObservation
+                if featureName in [featureName2, featureName1]:
+                    grad += 1
+                possibleFeatureNames = self.generatePossibleStateFeatueNames(t, thisObservation) + \
+                                       self.generatePossibleStateTrans(t, tagList, charList)
+                if featureName in possibleFeatureNames:
+                    grad = grad - self.calFeatureFunctionValueAndMargProb(featureName, charList, t) / z_x
+            gradMap[featureName] = grad
+        for key in gradMap:
+            if key in self.featureWeightMap:
+                gradMap[key] -= self.featureWeightMap.get(key, 0) / regFenmu
     # print(gradMap)
     return gradMap
 
@@ -439,8 +446,8 @@ def calGrad4WeightSlowMultiProcessNew(self, dataBatch, corpusSize, epoch, n):
 import time
 
 if __name__ == '__main__':
-    fileName = r"trainingCorpus4wordSeg_part.txt"
-    sentenceNum = 500
+    fileName = r"msra_training.txt"
+    sentenceNum = 20
     sentenceList = loadData(fileName, sentenceNum=sentenceNum)  # 加载语料
     #     print(sentenceList)
     preTrain = False  # False#,True
@@ -449,7 +456,7 @@ if __name__ == '__main__':
         model.setMode(preTrain=True)
         model.learningRate = 0.001
     else:
-        model = LinearChainCRF(epoch=300, learningRate=0.001, workerNum=8)
+        model = LinearChainCRF(epoch=100, learningRate=0.01, workerNum=5)
         model.setMode(preTrain=False)
 
     model.fitMulti(sentenceList)
@@ -458,7 +465,7 @@ if __name__ == '__main__':
     for line in sentenceList[:10]:
         res = model.predict(line[0])
         print("分词结果是", res)
-               #, "真实的分词结果是",  mergeCharsInOneWord(line[0]), line[1]))
+    #, "真实的分词结果是",  mergeCharsInOneWord(line[0]), line[1]))
     #
     # s = "我是一个粉刷将，粉刷本领强。我要把我的新房子刷的很漂亮。"
     # res = model.predict(s)

@@ -223,6 +223,7 @@ class LinearChainCRF():
     def fit(self, sentenceList):
         if self.preTrain == False:
             self.initParamWithTraingData(sentenceList)
+#         print(self.featureWeightMap)
         corpusSize = len(sentenceList)
         weightList = []
         initLearningRate = float(self.learningRate)
@@ -233,7 +234,7 @@ class LinearChainCRF():
                 weight1 = self.featureWeightMap['ES']
                 sentence = sentenceList[n]  # 遍历语料中的每一句话，训练模型
                 # self.learningRate = initLearningRate /np.sqrt(2 * (1 + epoch))#(2 * (1 + epoch))#
-                gradMap = self.calGrad4Weight(sentence,corpusSize)  # 计算模板函数权重对应的梯度
+                gradMap = self.calGrad4WeightSlowMultiProcessNew(sentence,corpusSize)  # 计算模板函数权重对应的梯度
                 self.updateWeight(gradMap)  # 基于更新规则更新权重
                 weight2 = self.featureWeightMap['ES']
                 weightList.append(self.featureWeightMap['ES'])
@@ -243,9 +244,9 @@ class LinearChainCRF():
             cost = self.calCost(sentenceList[:corpusSize])
             print("epoch:", epoch, 'sentence', epoch, 'cost:', cost, "weight of 'ES':", self.featureWeightMap['ES'])
 
-        from matplotlib import pyplot as plt
-        plt.plot(weightList)
-        plt.show()
+#         from matplotlib import pyplot as plt
+#         plt.plot(weightList)
+#         plt.show()
 
     def calCost(self, sentenceList):
         cost = 0
@@ -290,7 +291,36 @@ class LinearChainCRF():
     def setMode(self, preTrain=True):
         self.preTrain = preTrain
 
-
+    def calGrad4WeightSlowMultiProcessNew(self, sentence, corpusSize):
+        gradMap = {}
+        # process_bar.show_process()
+        charList = '@' + sentence[0] + '@'
+        tagList = '*' + sentence[1] + '#'
+        sentenceLength = len(charList)
+        z_x = 0
+        for state in self.stateFeatureSet:
+            z_x += self.backwardAlgrithm(state, charList, 1)  # 计算配分函数的取值
+        regFenmu = corpusSize * 10
+        for t in range(1, sentenceLength-1):
+            thisState, formerState = tagList[t], tagList[t - 1]
+            thisObservation = charList[t]
+            featureName2 = formerState + thisState
+            featureName1 = thisState + thisObservation
+            gradMap[featureName2] = gradMap.get(featureName2, 0) + self.ifFitFeatureTemplet(featureName2)
+            gradMap[featureName1] = gradMap.get(featureName1, 0) + self.ifFitFeatureTemplet(featureName1)
+            possibleFeatureNames = self.generatePossibleStateFeatueNames(t, thisObservation) + \
+                                   self.generatePossibleStateTrans(t, tagList, charList)
+            for featureName in possibleFeatureNames:
+                gradMap[featureName] = gradMap.get(featureName, 0) -\
+                      self.calFeatureFunctionValueAndMargProb(featureName, charList, t) / z_x
+    
+                # print('asdasd', np.exp(self.calFeatureFunctionValueAndMargProb(featureName, charList, t)) / z_x)
+        for key in gradMap:
+            if key in self.featureWeightMap:
+                gradMap[key] -= self.featureWeightMap.get(key, 0) / regFenmu
+            # print(gradMap)
+        return gradMap
+    
 def getKeyWithMaxValueInMap(dataMap):
     dataList = sorted(dataMap.items(), key=lambda x: x[1], reverse=True)
     theKey = dataList[0][0]
@@ -342,17 +372,19 @@ def loadData(fileName, sentenceNum=100):
             else:
                 line = line.split('	')
                 # print(line)
-                [char, tag] = line[0], line[1]  # 取出语料的文字和分词标记
+                [char, tag] = line[0], line[2]  # 取出语料的文字和分词标记
                 tempSentence.append(char)
                 tempTag.append(tag)
             line = f.readline()
     return corpus
 
+
+
 import time
 
 if __name__ == '__main__':
-    fileName = r"trainingCorpus4wordSeg_part.txt"
-    sentenceNum = 1
+    fileName = r"msra_training.txt"
+    sentenceNum = 20
     sentenceList = loadData(fileName, sentenceNum=sentenceNum)  # 加载语料
     #     print(sentenceList)
     preTrain = False  # False#,True
