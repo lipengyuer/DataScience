@@ -231,17 +231,18 @@ class LinearChainCRF():
     def fitMulti(self, sentenceList):
         if self.preTrain == False:
             self.initParamWithTraingData(sentenceList)
-        batchSize = 20
-        miniBatchSize = 3
+        batchSize = self.workerNum
+        miniBatchSize = 1#self.workerNum
         corpusSize = len(sentenceList)
         weightList = []
         initLearningRate = float(self.learningRate)
         weight1, weight2 = 0, 0
 
         for epoch in range(self.epoch):
-            t1 = time.time()
+            
             random.shuffle(sentenceList)
             for n in range(0, len(sentenceList), batchSize):
+                t1 = time.time()
                 dataBatch = sentenceList[n: n+batchSize]
                 pool = Pool(self.workerNum)
                 gradsList = []
@@ -262,7 +263,9 @@ class LinearChainCRF():
                 cost = self.calCost(sentenceList[:batchSize])
                 t2 = time.time()
                 print("epoch:", epoch, ',sentence', n, ',cost:', cost, ",weight of 'ES':", self.featureWeightMap['ES'], ',time cost is', t2-t1)
-                weightList.append(self.featureWeightMap['ES'])
+  
+            print(model.predict(sentenceList[0][0]))
+            weightList.append(self.featureWeightMap['ES'])
             if np.isnan(self.featureWeightMap['ES']) == True or np.abs(weight2 - weight1) > 10:
                 print(np.isnan(self.featureWeightMap['ES']))
                 break
@@ -374,7 +377,7 @@ def loadData(fileName, sentenceNum=100):
 
 
 def calGrad4WeightSlowMultiProcess(self, dataBatch, corpusSize, epoch, n):
-    print("第", epoch, '轮，进度是', n, '/', corpusSize)
+#     print("第", epoch, '轮，进度是', n, '/', corpusSize)
     gradMap = {}
     # process_bar = ShowProcess(len(dataBatch), 'OK')
     for sentence in dataBatch:
@@ -410,7 +413,7 @@ def calGrad4WeightSlowMultiProcess(self, dataBatch, corpusSize, epoch, n):
 
 
 def calGrad4WeightSlowMultiProcessNew(self, dataBatch, corpusSize, epoch, n):
-    print("第", epoch, '轮，进度是', n, '/', corpusSize)
+#     print("第", epoch, '轮，进度是', n, '/', corpusSize)
     gradMap = {}
     # process_bar = ShowProcess(len(dataBatch), 'OK')
     for sentence in dataBatch:
@@ -456,7 +459,7 @@ if __name__ == '__main__':
         model.setMode(preTrain=True)
         model.learningRate = 0.001
     else:
-        model = LinearChainCRF(epoch=100, learningRate=0.01, workerNum=5)
+        model = LinearChainCRF(epoch=500, learningRate=0.005, workerNum=1)
         model.setMode(preTrain=False)
 
     model.fitMulti(sentenceList)

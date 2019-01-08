@@ -230,6 +230,7 @@ class LinearChainCRF():
         weight1, weight2 = 0, 0
         for epoch in range(self.epoch):
             # pickle.dump(self, open('md.pkl', 'wb'))
+            random.shuffle(sentenceList)
             for n in range(corpusSize):
                 weight1 = self.featureWeightMap['ES']
                 sentence = sentenceList[n]  # 遍历语料中的每一句话，训练模型
@@ -243,7 +244,7 @@ class LinearChainCRF():
                 break
             cost = self.calCost(sentenceList[:corpusSize])
             print("epoch:", epoch, 'sentence', epoch, 'cost:', cost, "weight of 'ES':", self.featureWeightMap['ES'])
-
+            print(print(model.predict(sentenceList[0][0])))
 #         from matplotlib import pyplot as plt
 #         plt.plot(weightList)
 #         plt.show()
@@ -384,7 +385,7 @@ import time
 
 if __name__ == '__main__':
     fileName = r"msra_training.txt"
-    sentenceNum = 20
+    sentenceNum = 200
     sentenceList = loadData(fileName, sentenceNum=sentenceNum)  # 加载语料
     #     print(sentenceList)
     preTrain = False  # False#,True
