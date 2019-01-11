@@ -28,12 +28,25 @@ def insertSort(numList):
         if ifAllLarger==True:
             res = [num] + res
     return res
-                
+
+def insertShellSort(numList):
+    pass         
 #冒泡
 def bubbleSort(numList):
-    newnumList = []
+    for i in range(0,len(numList)):
+        for j in range(1,len(numList)):
+            if numList[j-1]>=numList[j]:
+                tempMin = numList[j]
+                numList[j] = numList[j-1]
+                numList[j-1] = tempMin
+    return numList
+            
+    
+    
+    
 #快速
 
 if __name__ == '__main__':
     a = [1,6, 3,2,5,3,5, 2]
     print(insertSort(a))
+    print(bubbleSort(a))
