@@ -2,6 +2,8 @@
 
 import pickle
 import numpy as np
+import random, copy
+
 #加载手写体数字识别数据集
 def loadData():
     import tensorflow as tf 
@@ -53,7 +55,7 @@ class CNN():
         for anImage in inputImageList:
             newImage = np.zeros((newHeight, newWidth))#创建一个0矩阵，尺寸与填充后的图像大小相同
             newImage[incLengthHalf: newHeight-incLengthHalf, incLengthHalf: newWidth-incLengthHalf] = anImage#把原始图像覆盖到0矩阵的中心位置
-        newImageList.append(newImage)
+            newImageList.append(newImage)
         return newImageList, incLengthHalf
     #激活函数
     def relu(self, regressionRes):
@@ -62,23 +64,62 @@ class CNN():
         return regressionRes
         
     def colIt(self, newImage, oriHeight, oriWidth, incLengthHalf, weightMatrix, bias, stride):#对图像进行卷积
-        outputImage = np.zeros((oriHeight,oriWidth))
+        outputImage = []#直接用list来接收结果，算是一种偷懒的做法；效率更高的是创建尺寸合适的np.array
         for i in range(incLengthHalf, incLengthHalf + oriHeight, stride):
+            tempList = []
             for j in range(incLengthHalf, incLengthHalf + oriWidth, stride):
                 pointsInField = newImage[i-incLengthHalf: i+incLengthHalf+1, j-incLengthHalf: j+incLengthHalf+1]
 #                 print(np.sum(pointsInField*weightMatrix) + bias)
 #                 print(np.sum(pointsInField*weightMatrix))
-                outputImage[i-incLengthHalf,j-incLengthHalf+1] = self.relu(np.sum(pointsInField*weightMatrix) + bias)
+                output = self.relu(np.sum(pointsInField*weightMatrix) + bias)
+                tempList.append(output)
+            outputImage.append(tempList)
+        outputImage = np.array(outputImage)
         return outputImage
-    
+
+    def padding4Pooling(self, oriImage):
+        incLength = (self.poolingSize-1)
+        incLengthHalf = int(self.poolingSize/2)
+        # print(incLengthHalf)
+        oriHeight, oriWidth = oriImage.shape
+        newHeight, newWidth = oriHeight + incLength, oriWidth + incLength
+        newImage = np.zeros((newHeight, newWidth))#创建一个0矩阵，尺寸与填充后的图像大小相同
+        newImage[incLengthHalf: newHeight-incLengthHalf + 1,
+                        incLengthHalf: newWidth-incLengthHalf + 1] = oriImage#把原始图像覆盖到0矩阵的中心位置
+        return newImage, incLengthHalf
+
     def pooling(self, anImage):#采样窗口和步长是随意设置的，需要这里自动适应
         oriHeight, oriWidth = anImage.shape
-        newImage = np.zeros((oriHeight-self.poolingSize+1))
-        for i in range(0, oriHeight-self.poolingSize+1, self.poolingStride):
-            for j in range(0, oriWidth-self.poolingSize+1, self.poolingStride):
-                
-        
-        
+        newImage = []
+        padImage, incLengthHalf = self.padding4Pooling(anImage)
+        newHeight, newWidth = padImage.shape
+        for i in range(incLengthHalf, newHeight, self.poolingStride):
+            tempList = []
+            for j in range(incLengthHalf, newWidth, self.poolingStride):
+                sliceOfImage = padImage[i-incLengthHalf: i+incLengthHalf, j-incLengthHalf: j+incLengthHalf]
+                meanV = np.mean(sliceOfImage)
+                tempList.append(meanV)
+            newImage.append(tempList)
+        return newImage
+
+    #将一批图片的索引，分成均等分，每个卷积核一份
+    def splitImageList4EachKernel(self, numOfOriImage):
+        # 然后让每一个卷积核扫描特定的图片，分别得到若干图片的抽象
+        oriIndexList = list(range(numOfOriImage))
+        numOfInputImage4AKernel = int(numOfOriImage / self.kernelNum)  # 求每一个卷积核需要扫描的图片个数
+        imageIndexOfEachKernel = []
+        if numOfInputImage4AKernel <= 1:  # 卷积核个数大于图片个数
+            tempIndexList = []
+            for i in range(int(self.kernelNum / numOfOriImage) + 1):
+                tempIndexList += oriIndexList
+            for i in range(self.kernelNum):
+                imageIndexOfEachKernel.append([tempIndexList[i], tempIndexList[i]])
+        else:
+            tempIndexList = oriIndexList + oriIndexList
+            for i in range(self.kernelNum):
+                imageIndexOfEachKernel.append(tempIndexList[i: i + numOfInputImage4AKernel])
+        return imageIndexOfEachKernel
+
     def calOutput(self, inputImageList):
         outputImageList = []
         #首先填充.这里为了简单，没有提供不填充的选项
@@ -86,20 +127,7 @@ class CNN():
         oriHeight, oriWidth = inputImageList[0].shape
         numOfOriImage = len(inputImageList)
 #         print(inputImageList)
-        #然后让每一个卷积核扫描特定的图片，分别得到若干图片的抽象
-        numOfInputImage4AKernel = int(numOfOriImage/self.kernelNum)#求每一个卷积核需要扫描的图片个数
-        
-        imageIndexOfEachKernel = []
-        if numOfInputImage4AKernel<=1:#卷积核个数大于图片个数
-            tempIndexList = []
-            for i in range(int(self.kernelNum/numOfOriImage)+1):
-                tempIndexList += list(range(numOfOriImage))
-            for i in range(self.kernelNum):
-                imageIndexOfEachKernel.append([tempIndexList[i], tempIndexList[i]])
-        else:
-            tempIndexList = list(range(numOfOriImage)) + list(range(numOfOriImage))
-            for i in range(self.kernelNum):
-                imageIndexOfEachKernel.append(tempIndexList[i: i + numOfInputImage4AKernel])            
+        imageIndexOfEachKernel = self.splitImageList4EachKernel(numOfOriImage)
         
         for i in range(len(imageIndexOfEachKernel)):
             imageIndexOfThisKernel = imageIndexOfEachKernel[i]
@@ -107,14 +135,100 @@ class CNN():
             for index in range(start, end+1):
                 anImage = newInputImageList[index]
                 outputImage = self.colIt(anImage, oriHeight, oriWidth, incLengthHalf, self.weightListOfKernels[i],self.biasList[i], self.colStride)
+                outputImage = self.pooling(outputImage)
                 print(outputImage)
                 print("###################")
                 outputImageList.append(outputImage)
-        
-        
+
+
+class Softmax():#需要为cnn的输出做一些改动，比如需要将cnn传过来的抽象图像拉直，拼接成一个向量；
+    # 特征的个数就是这个向量的长度。初始化softmax分类器参数的时候，需要接收来自前面的结果。
+
+    def __init__(self, learningRate=.01, stepNum=10):
+        self.pars = None  # 参数矩阵，每一行是一个类别对应的自变量系数
+        self.parNum = 0  # 模型里自变量的个数，后面需要初始化
+        # 这里为了方便，截距被当作一个取值固定的变量来处理，系数是1.模型输入后，会初始化这个向量
+        self.diffFuctions = []  # 存储每个变量对应方向的偏导数
+        self.learningRate = learningRate  # 学习率。这里每个参数的学习率是一样的；我们也可以为各个参数设置不同的学习率。
+        self.stepNum = stepNum  # 每一批数据学习的步数
+
+    def fit(self, trainInput, trainOutput):
+        self.x = copy.deepcopy(trainInput)
+        self.N = len(trainOutput)
+        self.y = trainOutput
+        self.classNum = len(trainOutput[0])
+
+        def predict4Train(inputData):  # 训练里使用的一个predict函数，
+            # 针对训练数据已经为截距增加了变量的情况
+            probList = np.dot(self.pars, np.transpose(inputData))
+            probList = list(probList[:, 0])  # 矩阵的第一行是概率分布列表
+            probList = self.softmax(probList)
+            probList = list(probList)
+            return probList
+
+        trainOutput = np.array(trainOutput)
+        self.parNum = len(trainInput[0, :])  # 初始化模型里自变量的个数
+        trainInput = np.insert(trainInput, self.parNum, 1, axis=1)  # 为截距增加一列取值为1的变量
+        self.parNum += 1
+        self.pars = [[0 * random.uniform(-0.2, 0.2) for i in range(self.parNum)]
+                     for j in range(self.classNum)]  # 初始化模型参数矩阵(self.classNum行self.parNum列)，这里使用0。
+        self.pars = np.array(self.pars)  # 处理成numpy的数组，便于进行乘法等运算
+        self.k = self.parNum
+        for _ in range(self.stepNum):  # 数据需要学习多次
+            for i in range(0, len(trainInput)):  # 遍历样本
+                thisInput = trainInput[i, :]
+                thisInput = np.array([thisInput])
+                thisOutPut = trainOutput[i, :]
+                delta = np.zeros((self.classNum, self.parNum))  # 用来存储基于当前参数和这个样本计算出来的参数修正量
+                costValue = 0
+                predProbList = predict4Train(thisInput)
+                for m in range(self.classNum):  # 遍历每一个softmax函数
+                    realProbThisClass = thisOutPut[m]
+                    for n in range(self.parNum):  # 遍历这个softmax函数的每一个参数
+                        predProbThisClass = predProbList[m]
+                        if predProbThisClass > 0:
+                            costValue += realProbThisClass * np.log10(predProbThisClass)
+                        gradOnThisDim = thisInput[0, n] * (predProbThisClass - realProbThisClass)
+                        # python3X里，除以int时，如果不能整除，就会得到一个float;python2X里则会得到一个想下取整的结果，要注意。
+                        delta[m, n] = -self.learningRate * gradOnThisDim
+                self.pars += delta  # 更新参数
+                print("损失值为", costValue)
+                # print(self.pars)
+
+    # 计算一个观测值的输出
+    def predict(self, inputData):
+        inputData = np.array(inputData.tolist() + [1])  # 为截距增加一列取值为1的变量
+        probList = np.dot(self.pars, np.transpose(inputData))
+        probList = list(probList)  # 从矩阵的第一行才是概率分布列表
+        probList = self.softmax(probList)
+        maxProb = np.max(probList)
+        probList = list(probList)
+        maxProbIndex = probList.index(maxProb)
+        # 用来做预测的时候，需要将概率值二值化，也就是输出类别标签
+        predLabel = [1 if i == maxProbIndex else 0 for i in range(len(probList))]
+        return predLabel
+
+    def softmax(self, xList):
+        xArray = np.array(xList)
+        xArray = np.exp(xArray)
+        sumV = sum(xArray)
+        if sumV == 0:  # 如果各家概率都是零
+            result = xArray * 0
+        else:
+            result = xArray / sumV
+        return result
             
         
-        
+class CNNSoftmax():
+    def __init__(self, picShape):
+        self.layers = []#用于存储各层参数
+        self.picShape = picShape#初始化的时候，需要手动输入图片的高和宽，用来推测后面的一系列参数
+
+    def createNetwork(self):#可以在
+        cnnLayer1 = CNN()
+        cnnLayer2 = CNN()
+        softmaxLayer = Softmax()
+        self.layers = [cnnLayer1, cnnLayer2, softmaxLayer]
         
         
         
@@ -124,7 +238,7 @@ if __name__ == '__main__':
 #     testInput, testOutput, trainInput, trainOutPut = loadSimpleData()
     testInput, testOutput = loadImageOfSix()
     print(testOutput[:3])
-    cnn = CNN()
+    cnn = CNN(kernelNum=5, colStride=2, receptiveFieldSize=3, poolingSize=2, poolingStride=2)
     cnn.calOutput(testInput)
     
     
