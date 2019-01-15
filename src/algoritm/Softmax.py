@@ -114,6 +114,60 @@ class Softmax():
         print("列表示预测类别;行表示真实类别")
         print(confusionMatrix)
 
+class Softmax4CNN():#需要为cnn的输出做一些改动，比如需要将cnn传过来的抽象图像拉直，拼接成一个向量；
+    # 特征的个数就是这个向量的长度。初始化softmax分类器参数的时候，需要接收来自前面的结果。
+
+    def __init__(self, numOfNode, classNum, learningRate=.01, stepNum=10):
+        self.weights = None  # 参数矩阵，每一行是一个类别对应的自变量系数
+        self.parNum = numOfNode  # 模型里自变量的个数，后面需要初始化
+        # 这里为了方便，截距被当作一个取值固定的变量来处理，系数是1.模型输入后，会初始化这个向量
+        self.diffFuctions = []  # 存储每个变量对应方向的偏导数
+        self.learningRate = learningRate  # 学习率。这里每个参数的学习率是一样的；我们也可以为各个参数设置不同的学习率。
+        self.stepNum = stepNum  # 每一批数据学习的步数
+        self.classNum = classNum
+        self.init()
+
+    def init(self):
+        self.weights = [[random.uniform(-0.2, 0.2) for i in range(self.parNum)]
+                     for j in range(self.classNum)]  # 初始化模型参数矩阵(self.classNum行self.parNum列)，这里使用0。
+        self.weights = np.array(self.weights)  # 处理成numpy的数组，便于进行乘法等运算
+        self.grad = np.array(self.weights)#梯度矩阵和权重矩阵shape相同
+        self.bias = [random.uniform(-0.2, 0.2) for j in range(self.classNum)]
+        self.bias = np.array(self.bias)
+
+    def calGrad(self, inputImageList, outputVector):
+        inputVector = np.array(inputImageList).reshape((1, self.parNum))
+        predOutputVector = self.predict(inputImageList)
+        for classNO in range(self.classNum):#遍历每一个类别的位置
+            for i in range(self.parNum):#遍历与当前节点相连的所有特征
+                self.grad[classNO, i] = inputVector[i] * \
+                                        (predOutputVector[classNO] - outputVector[classNO])
+    # 计算一个观测值的输出
+    def predict(self, inputImageList):
+        inputData = np.array(inputImageList).reshape((1, self.parNum))
+        probList = np.dot(self.weights, np.transpose(inputData))
+        probList = np.transpose(probList)
+        probList += self.bias
+        probList = probList[0]
+        probList = list(probList)  # 从矩阵的第一行才是概率分布列表
+        probList = self.softmax(probList)
+        maxProb = np.max(probList)
+        probList = list(probList)
+        maxProbIndex = probList.index(maxProb)
+        # 用来做预测的时候，需要将概率值二值化，也就是输出类别标签
+        predLabel = [1 if i == maxProbIndex else 0 for i in range(len(probList))]
+        return predLabel
+
+    def softmax(self, xList):
+        xArray = np.array(xList)
+        xArray = np.exp(xArray)
+        sumV = sum(xArray)
+        if sumV == 0:  # 如果各家概率都是零
+            result = xArray * 0
+        else:
+            result = xArray / sumV
+        return result
+
 dataStr = """5.1,3.5,1.4,0.2,Iris-setosa
 4.9,3.0,1.4,0.2,Iris-setosa
 4.7,3.2,1.3,0.2,Iris-setosa
