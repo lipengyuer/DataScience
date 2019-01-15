@@ -211,28 +211,64 @@ class Softmax():#需要为cnn的输出做一些改动，比如需要将cnn传过
             
         
 class CNNSoftmax():
-    def __init__(self, picShape, classNum):
+    def __init__(self, picShape, classNum, epochNum=1):
         self.classNum = classNum
         self.layers = []#用于存储各层参数
         self.picShape = picShape#初始化的时候，需要手动输入图片的高和宽，用来推测后面的一系列参数
         self.createNetwork()
+        self.epochNum = epochNum
 
     def createNetwork(self):#可以在
-        cnnLayer1 = CNN(self.picShape,1)
+        cnnLayer1 = CNN(self.picShape,1,
+                        kernelNum = 1, colStride=2, receptiveFieldSize = 3, poolingSize=2, poolingStride=2)
         print(cnnLayer1.outputImageShape, cnnLayer1.outputImageNum)
 
-        cnnLayer2 = CNN(cnnLayer1.outputImageShape, cnnLayer1.outputImageNum)
+        cnnLayer2 = CNN(cnnLayer1.outputImageShape, cnnLayer1.outputImageNum,
+                        kernelNum = 1, colStride=2, receptiveFieldSize = 3, poolingSize=2, poolingStride=2)
         height, width, num = cnnLayer2.outputImageShape[0], cnnLayer2.outputImageShape[1], cnnLayer2.outputImageNum
         softmaxLayer = Softmax(height*width*num, self.classNum)
         self.layers = [cnnLayer1, cnnLayer2, softmaxLayer]
-        
+    
+    def shuffleData(self, inputList, outputList):
+        indexList = list(range(len(inputList)))
+        random.shuffle(indexList)
+        resInput, resOutput = [], []
+        for i in indexList:
+            resInput.append(inputList[i])
+            resOutput.append(outputList[i])
+        return resInput, resOutput
+    
+    def calGrad(self, anImage, realLabel):#梯度计算
+        pass
+    
+    #更新参数
+    def updateWeights(self, gradList):
+        pass
+    
+    #使用BP算法，训练模型
+    def fit(self, trainingImageList, trainingLabelList):
+        for epoch in range(self.epochNum):
+            trainingImageList, trainingLabelList = self.shuffleData(trainingImageList, trainingLabelList)
+            for i in range(len(trainingImageList)):
+                anImage, realLabel = trainingImageList[i], trainingLabelList[i]
+                gradList = self.calGrad(anImage, realLabel)
+                self.updateWeights(gradList)
+                if i%10==0:
+                    cost = self.calCost(trainingImageList[:10], trainingLabelList[:10])
+                    print("已经学习了", epoch, '轮, cost为', cost)
+                
         
     def predict(self, anImage):
         anImage = [anImage]
         for layer in self.layers:
             anImage = layer.predict(anImage)
-            print(anImage)
-        
+#            print(anImage)
+        return anImage
+    
+    #计算损失值
+    def calCost(self, trainingImageList, trainingLabelList):
+        pass
+    
 if __name__ == '__main__':
 #     loadData()
 #     testInput, testOutput, trainInput, trainOutPut = loadSimpleData()
@@ -241,7 +277,9 @@ if __name__ == '__main__':
 #     cnn = CNN(kernelNum=5, colStride=2, receptiveFieldSize=3, poolingSize=2, poolingStride=2)
 #     cnn.calOutput(testInput)
     clf = CNNSoftmax([6, 6], 10)
-    clf.predict(testInput[0])
+    clf.fit(testInput, testOutput)
+    pred = clf.predict(testInput[0])
+    print(pred)
     
     
     
