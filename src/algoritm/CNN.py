@@ -4,11 +4,6 @@ import pickle
 import numpy as np
 import random, copy
 
-#把池化层独立出来
-class PoolingLayer():
-    def __init__(self):
-        pass
-
 #一个卷积层，
 class CNN():
     def __init__(self, inputImageShapeFromFormerLayer, inputImageNumFromFormerLayer, kernelNum = 5, colStride=2, receptiveFieldSize = 3, poolingSize=2, poolingStride=2):
