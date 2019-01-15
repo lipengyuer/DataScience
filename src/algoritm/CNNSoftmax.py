@@ -82,10 +82,18 @@ class CNNSoftmax():
 
     #训练过程中需要使用的预测函数，会把各层的输出保留起来，用于计算梯度和误差
     def predict4Train(self, anImage):
-        pass
+        for layer in self.layers:
+            anImage = layer.predict4Trian(anImage)
+
     # 计算损失值
     def calCost(self, trainingImageList, trainingLabelList):
-        pass
+        cost = 0
+        for j in range(len(trainingImageList)):
+            predLabel = self.predict([trainingImageList[j]])
+            realLabel = trainingLabelList[j]
+            for i in range(self.classNum): cost -= realLabel[i] * np.log(predLabel[i])
+        print("损失值是", cost)
+
 
 
 if __name__ == '__main__':

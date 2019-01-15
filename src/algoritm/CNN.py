@@ -4,7 +4,10 @@ import pickle
 import numpy as np
 import random, copy
 
-
+#把池化层独立出来
+class PoolingLayer():
+    def __init__(self):
+        pass
 
 #一个卷积层，
 class CNN():
@@ -58,7 +61,6 @@ class CNN():
         return newImageList, incLengthHalf
     #激活函数
     def relu(self, regressionRes):
-#         print(regressionRes)
         if regressionRes<0: regressionRes=0
         return regressionRes
         
@@ -139,6 +141,27 @@ class CNN():
                 outputImage = self.pooling(outputImage)
 #                 print(outputImage)
 #                 print("###################")
+                outputImageList.append(outputImage)
+        return outputImageList
+
+    def predict4Train(self, inputImageList):
+        outputImageList = []
+        # 首先填充.这里为了简单，一律填充
+        self.traningInput = inputImageList
+        self.trainingColOutput = []
+        newInputImageList, incLengthHalf = self.padding(inputImageList)
+        oriHeight, oriWidth = inputImageList[0].shape
+        numOfOriImage = len(inputImageList)
+        imageIndexOfEachKernel = self.splitImageList4EachKernel(numOfOriImage)
+
+        for i in range(len(imageIndexOfEachKernel)):
+            imageIndexOfThisKernel = imageIndexOfEachKernel[i]
+            start, end = imageIndexOfThisKernel[0], imageIndexOfThisKernel[-1]
+            for index in range(start, end + 1):
+                anImage = newInputImageList[index]
+                outputImage = self.colIt(anImage, oriHeight, oriWidth, incLengthHalf, self.weightListOfKernels[i],
+                                         self.biasList[i], self.colStride)
+                outputImage = self.pooling(outputImage)
                 outputImageList.append(outputImage)
         return outputImageList
 

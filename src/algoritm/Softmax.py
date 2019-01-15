@@ -158,6 +158,17 @@ class Softmax4CNN():#需要为cnn的输出做一些改动，比如需要将cnn�
         predLabel = [1 if i == maxProbIndex else 0 for i in range(len(probList))]
         return predLabel
 
+    # 计算一个观测值的输出
+    def predict4Train(self, inputImageList):
+        self.trainingInput = inputImageList#训练过程中需要用的变量，训练完成后，需要清空
+        inputData = np.array(inputImageList).reshape((1, self.parNum))
+        probList = np.dot(self.weights, np.transpose(inputData))
+        probList = np.transpose(probList) + self.bias
+        probList = list(probList[0])  # 从矩阵的第一行才是概率分布列表
+        probList = self.softmax(probList)
+        self.traningOutput = probList
+        return probList
+
     def softmax(self, xList):
         xArray = np.array(xList)
         xArray = np.exp(xArray)
