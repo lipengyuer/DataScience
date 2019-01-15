@@ -26,7 +26,9 @@ def loadImageOfSix():
 
 #一个卷积层，
 class CNN():
-    def __init__(self, kernelNum = 5, colStride=2, receptiveFieldSize = 3, poolingSize=2, poolingStride=2):
+    def __init__(self, inputImageShapeFromFormerLayer, inputImageNumFromFormerLayer, kernelNum = 5, colStride=2, receptiveFieldSize = 3, poolingSize=2, poolingStride=2):
+        self.inputImageShapeFromFormerLayer = inputImageShapeFromFormerLayer
+        self.inputImageNumFromFormerLayer = inputImageNumFromFormerLayer
         self.kernelNum = kernelNum#本层卷积核的个数
         self.colStride = colStride#卷积步长
         self.receptiveFieldSize = receptiveFieldSize#卷积核的感受野的大小，这里为了简单，采用方形感受野。要求边长为奇数
@@ -35,6 +37,10 @@ class CNN():
         self.poolingStride = poolingStride
         self.weightListOfKernels = []#存储每个卷积核的权重矩阵
         self.biasList = []#存储每个卷积核的偏置
+
+        self.outputImageNum = None#输出图像的个数
+        self.outputImageShape = None#输出图像的形状用于提供给后一层CNN来做相关尺寸的计算，从而推算出最后一层CNN的输出尺寸
+        #用来初始化softmax的权重向量
         #初始化参数
         self.initAll()
         
@@ -45,11 +51,22 @@ class CNN():
             self.weightListOfKernels.append(weight)
             self.biasList.append(bias)
 #         print(self.weightListOfKernels, self.biasList)
-    
+        self.calOutputInfo()
+
+    #基于出入图像的尺寸和数量，以及卷积核等的情况，计算输出的图像的个数和尺寸
+    def calOutputInfo(self):
+        #生成来自上一层的模拟数据
+        imageList = [np.zeros(self.inputImageShapeFromFormerLayer) for _ in range(self.inputImageNumFromFormerLayer)]
+        outputImageList = self.predict(imageList)
+        self.outputImageNum = len(outputImageList)
+        print(outputImageList)
+        self.outputImageShape = outputImageList[0].shape
+        
     def padding(self, inputImageList):#对图像进行填充
         newImageList = []
         incLength = (self.receptiveFieldSize-1)
         incLengthHalf = int(incLength/2)
+        print(inputImageList[0].shape)
         oriHeight, oriWidth = inputImageList[0].shape
         newHeight, newWidth = oriHeight + incLength, oriWidth + incLength
         for anImage in inputImageList:
@@ -100,6 +117,7 @@ class CNN():
                 meanV = np.mean(sliceOfImage)
                 tempList.append(meanV)
             newImage.append(tempList)
+        newImage = np.array(newImage)
         return newImage
 
     #将一批图片的索引，分成均等分，每个卷积核一份
@@ -120,9 +138,10 @@ class CNN():
                 imageIndexOfEachKernel.append(tempIndexList[i: i + numOfInputImage4AKernel])
         return imageIndexOfEachKernel
 
-    def calOutput(self, inputImageList):
+    def predict(self, inputImageList):
         outputImageList = []
         #首先填充.这里为了简单，没有提供不填充的选项
+#         print(inputImageList)
         newInputImageList, incLengthHalf = self.padding(inputImageList)
         oriHeight, oriWidth = inputImageList[0].shape
         numOfOriImage = len(inputImageList)
@@ -136,69 +155,41 @@ class CNN():
                 anImage = newInputImageList[index]
                 outputImage = self.colIt(anImage, oriHeight, oriWidth, incLengthHalf, self.weightListOfKernels[i],self.biasList[i], self.colStride)
                 outputImage = self.pooling(outputImage)
-                print(outputImage)
-                print("###################")
+#                 print(outputImage)
+#                 print("###################")
                 outputImageList.append(outputImage)
+        return outputImageList
 
 
 class Softmax():#需要为cnn的输出做一些改动，比如需要将cnn传过来的抽象图像拉直，拼接成一个向量；
     # 特征的个数就是这个向量的长度。初始化softmax分类器参数的时候，需要接收来自前面的结果。
 
-    def __init__(self, learningRate=.01, stepNum=10):
-        self.pars = None  # 参数矩阵，每一行是一个类别对应的自变量系数
-        self.parNum = 0  # 模型里自变量的个数，后面需要初始化
+    def __init__(self, numOfNode, classNum, learningRate=.01, stepNum=10):
+        self.weights = None  # 参数矩阵，每一行是一个类别对应的自变量系数
+        self.parNum = numOfNode  # 模型里自变量的个数，后面需要初始化
         # 这里为了方便，截距被当作一个取值固定的变量来处理，系数是1.模型输入后，会初始化这个向量
         self.diffFuctions = []  # 存储每个变量对应方向的偏导数
         self.learningRate = learningRate  # 学习率。这里每个参数的学习率是一样的；我们也可以为各个参数设置不同的学习率。
         self.stepNum = stepNum  # 每一批数据学习的步数
+        self.classNum = classNum
+        self.init()
 
-    def fit(self, trainInput, trainOutput):
-        self.x = copy.deepcopy(trainInput)
-        self.N = len(trainOutput)
-        self.y = trainOutput
-        self.classNum = len(trainOutput[0])
-
-        def predict4Train(inputData):  # 训练里使用的一个predict函数，
-            # 针对训练数据已经为截距增加了变量的情况
-            probList = np.dot(self.pars, np.transpose(inputData))
-            probList = list(probList[:, 0])  # 矩阵的第一行是概率分布列表
-            probList = self.softmax(probList)
-            probList = list(probList)
-            return probList
-
-        trainOutput = np.array(trainOutput)
-        self.parNum = len(trainInput[0, :])  # 初始化模型里自变量的个数
-        trainInput = np.insert(trainInput, self.parNum, 1, axis=1)  # 为截距增加一列取值为1的变量
-        self.parNum += 1
-        self.pars = [[0 * random.uniform(-0.2, 0.2) for i in range(self.parNum)]
+    def init(self):
+        self.weights = [[random.uniform(-0.2, 0.2) for i in range(self.parNum)]
                      for j in range(self.classNum)]  # 初始化模型参数矩阵(self.classNum行self.parNum列)，这里使用0。
-        self.pars = np.array(self.pars)  # 处理成numpy的数组，便于进行乘法等运算
-        self.k = self.parNum
-        for _ in range(self.stepNum):  # 数据需要学习多次
-            for i in range(0, len(trainInput)):  # 遍历样本
-                thisInput = trainInput[i, :]
-                thisInput = np.array([thisInput])
-                thisOutPut = trainOutput[i, :]
-                delta = np.zeros((self.classNum, self.parNum))  # 用来存储基于当前参数和这个样本计算出来的参数修正量
-                costValue = 0
-                predProbList = predict4Train(thisInput)
-                for m in range(self.classNum):  # 遍历每一个softmax函数
-                    realProbThisClass = thisOutPut[m]
-                    for n in range(self.parNum):  # 遍历这个softmax函数的每一个参数
-                        predProbThisClass = predProbList[m]
-                        if predProbThisClass > 0:
-                            costValue += realProbThisClass * np.log10(predProbThisClass)
-                        gradOnThisDim = thisInput[0, n] * (predProbThisClass - realProbThisClass)
-                        # python3X里，除以int时，如果不能整除，就会得到一个float;python2X里则会得到一个想下取整的结果，要注意。
-                        delta[m, n] = -self.learningRate * gradOnThisDim
-                self.pars += delta  # 更新参数
-                print("损失值为", costValue)
-                # print(self.pars)
+        self.weights = np.array(self.weights)  # 处理成numpy的数组，便于进行乘法等运算
+        self.bias = [random.uniform(-0.2, 0.2) for j in range(self.classNum)]
+        self.bias = np.array(self.bias)
 
     # 计算一个观测值的输出
-    def predict(self, inputData):
-        inputData = np.array(inputData.tolist() + [1])  # 为截距增加一列取值为1的变量
-        probList = np.dot(self.pars, np.transpose(inputData))
+    def predict(self, inputImageList):
+#         print(inputImageList)
+        inputData = np.array(inputImageList).reshape((1, self.parNum))
+#         print(inputData)
+        probList = np.dot(self.weights, np.transpose(inputData))
+        probList = np.transpose(probList)
+        probList += self.bias
+        probList = probList[0]
         probList = list(probList)  # 从矩阵的第一行才是概率分布列表
         probList = self.softmax(probList)
         maxProb = np.max(probList)
@@ -220,26 +211,37 @@ class Softmax():#需要为cnn的输出做一些改动，比如需要将cnn传过
             
         
 class CNNSoftmax():
-    def __init__(self, picShape):
+    def __init__(self, picShape, classNum):
+        self.classNum = classNum
         self.layers = []#用于存储各层参数
         self.picShape = picShape#初始化的时候，需要手动输入图片的高和宽，用来推测后面的一系列参数
+        self.createNetwork()
 
     def createNetwork(self):#可以在
-        cnnLayer1 = CNN()
-        cnnLayer2 = CNN()
-        softmaxLayer = Softmax()
+        cnnLayer1 = CNN(self.picShape,1)
+        print(cnnLayer1.outputImageShape, cnnLayer1.outputImageNum)
+
+        cnnLayer2 = CNN(cnnLayer1.outputImageShape, cnnLayer1.outputImageNum)
+        height, width, num = cnnLayer2.outputImageShape[0], cnnLayer2.outputImageShape[1], cnnLayer2.outputImageNum
+        softmaxLayer = Softmax(height*width*num, self.classNum)
         self.layers = [cnnLayer1, cnnLayer2, softmaxLayer]
         
         
-        
+    def predict(self, anImage):
+        anImage = [anImage]
+        for layer in self.layers:
+            anImage = layer.predict(anImage)
+            print(anImage)
         
 if __name__ == '__main__':
 #     loadData()
 #     testInput, testOutput, trainInput, trainOutPut = loadSimpleData()
     testInput, testOutput = loadImageOfSix()
-    print(testOutput[:3])
-    cnn = CNN(kernelNum=5, colStride=2, receptiveFieldSize=3, poolingSize=2, poolingStride=2)
-    cnn.calOutput(testInput)
+#     print(testOutput[:3])
+#     cnn = CNN(kernelNum=5, colStride=2, receptiveFieldSize=3, poolingSize=2, poolingStride=2)
+#     cnn.calOutput(testInput)
+    clf = CNNSoftmax([6, 6], 10)
+    clf.predict(testInput[0])
     
     
     
