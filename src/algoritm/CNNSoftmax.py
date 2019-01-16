@@ -21,33 +21,54 @@ def loadSimpleData():
 
 
 def loadImageOfSix():
-    imageOfSix = [[1,1,1,1, 1, 1, 1, 1, 1], [1,0,0,0, 0, 0, 0, 0, 0],[1,0,0,0, 0, 0, 0, 0, 0],
-                  [1,0,0,0, 0, 0, 0, 0, 0], [1,1,1,1, 1, 1, 1, 1, 1], [1,0,0,0, 0, 0, 0, 0, 1],
-                  [1,0,0,0, 0, 0, 0, 0, 1], [1,0,0,0, 0, 0, 0, 0, 1],[1, 1,1,1, 1, 1, 1, 1, 1]]
+    imageOfSix = [[1,1,1,1, 1, 1, 1, 1, 1],
+                  [1,0,0,0, 0, 0, 0, 0, 0],
+                  [1,0,0,0, 0, 0, 0, 0, 0],
+                  [1,0,0,0, 0, 0, 0, 0, 0],
+                  [1,1,1,1, 1, 1, 1, 1, 1],
+                  [1,0,0,0, 0, 0, 0, 0, 1],
+                  [1,0,0,0, 0, 0, 0, 0, 1],
+                  [1,0,0,0, 0, 0, 0, 0, 1],
+                  [1, 1,1,1, 1, 1, 1, 1, 1]]
+
+    imageOfSeven = [[1,1,1,1, 1, 1, 1, 1, 1],
+                    [1,0,0,0, 0, 0, 0, 0, 1],
+                    [1,0,0,0, 0, 0, 0, 0, 1],
+                    [1,0,0,0, 0, 0, 0, 0, 1],
+                    [1,1,1,1, 1, 1, 1, 1, 1],
+                    [0,0,0,0, 0, 0, 0, 0, 1],
+                    [0,0,0,0, 0, 0, 0, 0, 1],
+                    [0,0,0,0, 0, 0, 0, 0, 1],
+                    [1,1,1,1, 1, 1, 1, 1, 1]]
     imageOfSix = np.array(imageOfSix)
-    return [imageOfSix], [[0, 0, 0, 0, 0, 0, 1, 0, 0, 0]]
+    return [imageOfSix, imageOfSeven], \
+              [[0, 0, 0, 0, 0, 0, 1, 0, 0, 0],[0, 0, 0, 0, 0, 0, 0, 0, 0, 1]]
 
 class CNNSoftmax():
-    def __init__(self, picShape, classNum, epochNum=1):
+    def __init__(self, picShape, classNum, epochNum=1, learningRate = 0.001):
         self.classNum = classNum
         self.layers = []  # 用于存储各层参数
         self.picShape = picShape  # 初始化的时候，需要手动输入图片的高和宽，用来推测后面的一系列参数
-        self.createNetwork()
         self.epochNum = epochNum
+        self.learningRate = learningRate
+        self.createNetwork()
+
 
     def createNetwork(self):  # 可以在
         cnnLayer1 = CNN([1, 1, self.picShape[0], self.picShape[1]],
-                        kernelNum=2, colStride=1, receptiveFieldSize=3, poolingSize=2, poolingStride=2)
+                        kernelNum=2, colStride=1, receptiveFieldSize=3, \
+                        poolingSize=2, poolingStride=2, learningRate=self.learningRate)
         print("第一个卷积层的输出形状是", cnnLayer1.outputShape)
 
         cnnLayer2 = CNN(cnnLayer1.outputShape, 
-                        kernelNum=2, colStride=1, receptiveFieldSize=3, poolingSize=2, poolingStride=2)
+                        kernelNum=2, colStride=1, receptiveFieldSize=3, \
+                        poolingSize=2, poolingStride=2, learningRate=self.learningRate)
     
         print("第二个卷积层的输出形状是", cnnLayer2.outputShape)
         kernelNum, picNum, height, width  = cnnLayer2.outputShape
         featureNumOfSoftMax = kernelNum*picNum*height*width
 #         print("softmax的特征数是", featureNumOfSoftMax)
-        softmaxLayer = Softmax4CNN(featureNumOfSoftMax, self.classNum)
+        softmaxLayer = Softmax4CNN(featureNumOfSoftMax, self.classNum, learningRate=self.learningRate)
         self.layers = [cnnLayer1, cnnLayer2, softmaxLayer]
 
     def shuffleData(self, inputList, outputList):
@@ -57,23 +78,23 @@ class CNNSoftmax():
         return resInput, resOutput
 
     def calGrad(self, anImage, realLabel):  # 梯度计算
-        self.gradList = [None for _ in range(len(self.layers))]  # 每一层的梯度数据
+        # self.gradList = [None for _ in range(len(self.layers))]  # 每一层的梯度数据
         outputVector = self.predict4Train(anImage)#执行一次前向过程，记录每一层的输入和输出
         #softmax层的梯度单独计算
-        self.gradList[-1] = self.layers[-1].calGrad(realLabel)
+        self.layers[-1].calGrad(realLabel)
 #         print("softmax层的梯度是", self.gradList[-1])
-        for i in range(len(self.layers)-2, 0, -1):#从后向前遍历各层
+        for i in range(len(self.layers)-2, -1, -1):#从后向前遍历各层
             thisLayer = self.layers[i]#本层神经元
             laterLayer = self.layers[i+1]#后一层神经元
-            print("正在计算第", i+1, '层的梯度')
+            # print("正在计算第", i+1, '层的梯度')
             thisLayer.calGrad(laterLayer.error2FormerLayer)
-            print("计算的到的梯度是", thisLayer.grad)
+            # print("计算的到的梯度是", thisLayer.grad)
                     
                     
     # 更新参数
     def updateWeights(self):
         for i in range(len(self.layers)):
-            print("正在更新第", i, '层的参数')
+            # print("正在更新第", i, '层的参数')
             self.layers[i].updateWeights()
 
     # 使用BP算法，训练模型
@@ -86,12 +107,15 @@ class CNNSoftmax():
                 anImage = anImage.reshape((1, 1, anImage.shape[0], anImage.shape[1]))#CNN的输入，第一维对应的是上一层的卷积核，
 #                 print("anImage", anImage, anImage.shape)
                 #第二维对应的是上一层每一个卷积核对应的输出图片个数。原始图片可以假装来自只有一个卷积核的层，输出图片也只有一个
-                gradList = self.calGrad(anImage, realLabel)
+                self.calGrad(anImage, realLabel)
+                # print("本次使用的梯度是", gradList)
+                # print(self.layers[0].__dict__.keys())
                 self.updateWeights()
-                if i % 10 == 0:
+                if i % 50 == 0:
 #                     print('asdasdasd', trainingImageList)
                     cost = self.calCost(anImage, realLabel)
-                    print("已经学习了", epoch, '轮, cost为', cost)
+                    print("已经学习了", epoch, '轮, cost为', cost,\
+                          '本轮的进度是',  i, '/', len(trainingImageList))
 
     def predict(self, imageList):
         for layer in self.layers:
@@ -110,13 +134,11 @@ class CNNSoftmax():
     # 计算损失值
     def calCost(self, trainingImageList, trainingLabelList):
         cost = 0
-        predLabel = self.predict(trainingImageList)
+        predLabel = self.predict4Train(trainingImageList)
         for i in range(self.classNum): cost -= trainingLabelList[i] * np.log(predLabel[i] + 0.0000001)
         return cost
 
-
-
-if __name__ == '__main__':
+def test1():
     #     loadData()
     #     testInput, testOutput, trainInput, trainOutPut = loadSimpleData()
     testInputList, testOutput = loadImageOfSix()
@@ -125,9 +147,35 @@ if __name__ == '__main__':
     #     cnn.calOutput(testInput)
     testInputList = np.array(testInputList)
     print(testInputList.shape)
-    clf = CNNSoftmax([testInputList.shape[1],testInputList.shape[2]], 10)
+    clf = CNNSoftmax([testInputList.shape[1],testInputList.shape[2]], 10,\
+                     epochNum=100, learningRate=0.01)
     clf.fit(testInputList, testOutput)
-    testInputList = testInputList.reshape((1, 1, testInputList.shape[1],testInputList.shape[2]))
-#     pred = clf.predict(testInputList)
-#     print(pred)
+    testInputList = testInputList[1].reshape((1, 1, testInputList.shape[1],testInputList.shape[2]))
+    pred = clf.predict(testInputList)
+    print(pred)
+
+def test2():
+    from tensorflow.examples.tutorials.mnist import input_data
+    from sklearn.model_selection import train_test_split
+    mnist = input_data.read_data_sets('../../data/mnist', one_hot=True)
+
+    inputData = mnist.test.images[:, :].reshape((-1, 28, 28))
+    outputData = mnist.test.labels[:, :]
+    trainingInput, testInput, traingOutput, testOutput = \
+        train_test_split(inputData, outputData, test_size=0.9)
+    print(trainingInput.shape)
+    clf = CNNSoftmax([inputData.shape[1],inputData.shape[2]], 10,\
+                     epochNum=30, learningRate=0.001)
+    clf.fit(trainingInput, traingOutput)
+    accuracy = [0,0]
+    for i in range(testInput.shape[0]):
+        testInputList = testInput[i].reshape((1, 1, inputData.shape[1],inputData.shape[2]))
+        pred = clf.predict(testInputList)
+        if np.argmax(pred)==np.argmax(testOutput[i]):
+            accuracy[0] += 1
+        accuracy[1] += 1
+        print(accuracy, np.argmax(pred), np.argmax(testOutput[i]))
+
+if __name__ == '__main__':
+    test2()
 

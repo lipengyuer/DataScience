@@ -30,7 +30,7 @@ class CNN():
             bias = np.random.normal()
             self.weightListOfKernels.append(weight)
             self.biasList.append(bias)
-#         print(self.weightListOfKernels, self.biasList)
+        # print(self.weightListOfKernels, self.biasList)
         self.weightListOfKernels = np.array(self.weightListOfKernels)
         self.biasList = np.array(self.biasList)
         self.calOutputInfo()
@@ -212,7 +212,7 @@ class CNN():
 #         print("基于池化层输出复原得到的图片是", kernelOutput)
         
         #接下来，基于池化层的输入，也就是卷积层的输出，来计算反向传播到前一层的误差
-        self.error4FormerLayer = np.zeros(self.traningInput.shape)
+        self.error2FormerLayer = np.zeros(self.traningInput.shape)
         for i in range(kernelNumOfFormerLayer):
             for j in range(picNumOfFormerLayer):
                 indexList = self.kernelIndex4EachInputImage[j]#这个图片对应的后一层的卷积核索引
@@ -220,7 +220,7 @@ class CNN():
                     for n in range(formerOutputWidth):
                         for laterKernelIndex in indexList:
                             outputOfThisKernel = kernelOutput[laterKernelIndex]
-                            self.error4FormerLayer[i, j , m, n] += \
+                            self.error2FormerLayer[i, j , m, n] += \
                                 self.traningInput[i, j, m, n]* outputOfThisKernel[j, m, n]
                                 
         self.grad = np.zeros(self.weightListOfKernels.shape)
@@ -241,7 +241,10 @@ class CNN():
                     self.grad[m,i,j] = tempGrad
 #         print("计算得到的梯度是", self.grad)
     def updateWeights(self):
-        self.weightListOfKernels += self.grad * self.learningRate
+        # print("CNN", self.__dict__.keys())
+        # print("本次更新参数使用 的梯度是",self.grad * self.learningRate )
+        # print("当前的参数是", self.weightListOfKernels)
+        self.weightListOfKernels -= self.grad * self.learningRate
                             
                         
                         

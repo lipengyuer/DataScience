@@ -160,7 +160,7 @@ class Softmax4CNN():#需要为cnn的输出做一些改动，比如需要将cnn�
         return self.grad
     
     def updateWeights(self):
-        self.weights += self.grad * self.learningRate
+        self.weights -= self.grad * self.learningRate
     # 计算一个观测值的输出
     def predict(self, inputImageList):
         inputData = np.array(inputImageList).reshape((1, self.parNum))
@@ -190,6 +190,7 @@ class Softmax4CNN():#需要为cnn的输出做一些改动，比如需要将cnn�
 
     def softmax(self, xList):
         xArray = np.array(xList)
+        # print(xArray)
         xArray = np.exp(xArray)
         sumV = sum(xArray)
         if sumV == 0:  # 如果各家概率都是零
