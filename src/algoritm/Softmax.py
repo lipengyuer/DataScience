@@ -120,6 +120,7 @@ class Softmax4CNN():#需要为cnn的输出做一些改动，比如需要将cnn�
     def __init__(self, numOfNode, classNum, learningRate=.01, stepNum=10):
         self.weights = None  # 参数矩阵，每一行是一个类别对应的自变量系数
         self.parNum = numOfNode  # 模型里自变量的个数，后面需要初始化
+        self.kernelNum = numOfNode#卷积层在训练的时候，需要获得后面一层的卷积核个数，这里假装softmax的节点就是卷积核
         # 这里为了方便，截距被当作一个取值固定的变量来处理，系数是1.模型输入后，会初始化这个向量
         self.diffFuctions = []  # 存储每个变量对应方向的偏导数
         self.learningRate = learningRate  # 学习率。这里每个参数的学习率是一样的；我们也可以为各个参数设置不同的学习率。
@@ -135,13 +136,31 @@ class Softmax4CNN():#需要为cnn的输出做一些改动，比如需要将cnn�
         self.bias = [random.uniform(-0.2, 0.2) for j in range(self.classNum)]
         self.bias = np.array(self.bias)
 
-    def calGrad(self, inputImageList, outputVector):
-        inputVector = np.array(inputImageList).reshape((1, self.parNum))
-        predOutputVector = self.predict(inputImageList)
+    def calGrad(self, outputVector):
+        #print("softmax的输入是", self.trainingInput)
+        inputVector = np.array(self.trainingInput).reshape((self.parNum))
+        predOutputVector =self.traningOutput
         for classNO in range(self.classNum):#遍历每一个类别的位置
             for i in range(self.parNum):#遍历与当前节点相连的所有特征
+                #print(inputVector[i])
                 self.grad[classNO, i] = inputVector[i] * \
                                         (predOutputVector[classNO] - outputVector[classNO])
+                                        
+        self.error2FormerLayer = np.zeros(self.trainingInput.shape)#softmax反向传播到前一层的误差
+        indexList = np.array(range(len(inputVector)))
+        indexCube = indexList.reshape(self.trainingInput.shape)#存储原始数据每一个点，在拉直后形成的一维向量中的位置
+        kernelNumOfFormerLayer, picNumOfFormerLayerKernel, height, width = self.trainingInput.shape
+        for i in range(kernelNumOfFormerLayer):
+            for j in range(picNumOfFormerLayerKernel):
+                for m in range(height):
+                    for n in range(width):
+                        softmaxFeatureNO = indexCube[i,j,m,n]#当前像素点对应的softmax特征序号
+                        #把与这个像素连接的所有来自后一层的误差加权球和
+                        self.error2FormerLayer[i,j,m,n] = np.sum(self.weights[:, softmaxFeatureNO] * (self.traningOutput-outputVector))          
+        return self.grad
+    
+    def updateWeights(self):
+        self.weights += self.grad * self.learningRate
     # 计算一个观测值的输出
     def predict(self, inputImageList):
         inputData = np.array(inputImageList).reshape((1, self.parNum))
@@ -157,7 +176,7 @@ class Softmax4CNN():#需要为cnn的输出做一些改动，比如需要将cnn�
         # 用来做预测的时候，需要将概率值二值化，也就是输出类别标签
         predLabel = [1 if i == maxProbIndex else 0 for i in range(len(probList))]
         return predLabel
-
+    
     # 计算一个观测值的输出
     def predict4Train(self, inputImageList):
         self.trainingInput = inputImageList#训练过程中需要用的变量，训练完成后，需要清空
