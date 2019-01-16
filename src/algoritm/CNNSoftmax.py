@@ -34,23 +34,21 @@ class CNNSoftmax():
         self.epochNum = epochNum
 
     def createNetwork(self):  # 可以在
-        cnnLayer1 = CNN(self.picShape, 1,
+        cnnLayer1 = CNN([1, 1, self.picShape[0], self.picShape[1]],
                         kernelNum=1, colStride=2, receptiveFieldSize=3, poolingSize=2, poolingStride=2)
-        print(cnnLayer1.outputImageShape, cnnLayer1.outputImageNum)
+        print(cnnLayer1.outputShape)
 
-        cnnLayer2 = CNN(cnnLayer1.outputImageShape, cnnLayer1.outputImageNum,
+        cnnLayer2 = CNN(cnnLayer1.outputShape, 
                         kernelNum=1, colStride=2, receptiveFieldSize=3, poolingSize=2, poolingStride=2)
-        height, width, num = cnnLayer2.outputImageShape[0], cnnLayer2.outputImageShape[1], cnnLayer2.outputImageNum
-        softmaxLayer = Softmax4CNN(height * width * num, self.classNum)
+        kernelNum, picNum, height, width  = cnnLayer2.outputShape
+        featureNumOfSoftMax = kernelNum*picNum*height*width
+        softmaxLayer = Softmax4CNN(featureNumOfSoftMax, self.classNum)
         self.layers = [cnnLayer1, cnnLayer2, softmaxLayer]
 
     def shuffleData(self, inputList, outputList):
         indexList = list(range(len(inputList)))
         random.shuffle(indexList)
-        resInput, resOutput = [], []
-        for i in indexList:
-            resInput.append(inputList[i])
-            resOutput.append(outputList[i])
+        resInput, resOutput = inputList[indexList], outputList[indexList]
         return resInput, resOutput
 
     def calGrad(self, anImage, realLabel):  # 梯度计算
@@ -63,22 +61,26 @@ class CNNSoftmax():
 
     # 使用BP算法，训练模型
     def fit(self, trainingImageList, trainingLabelList):
+        trainingImageList, trainingLabelList = np.array(trainingImageList), np.array(trainingLabelList)
         for epoch in range(self.epochNum):
             trainingImageList, trainingLabelList = self.shuffleData(trainingImageList, trainingLabelList)
             for i in range(len(trainingImageList)):
                 anImage, realLabel = trainingImageList[i], trainingLabelList[i]
+                anImage = anImage.reshape((1, 1, anImage.shape[0], anImage.shape[1]))#CNN的输入，第一维对应的是上一层的卷积核，
+#                 print("anImage", anImage, anImage.shape)
+                #第二维对应的是上一层每一个卷积核对应的输出图片个数。原始图片可以假装来自只有一个卷积核的层，输出图片也只有一个
                 gradList = self.calGrad(anImage, realLabel)
                 self.updateWeights(gradList)
                 if i % 10 == 0:
-                    cost = self.calCost(trainingImageList[:10], trainingLabelList[:10])
+                    print('asdasdasd', trainingImageList)
+                    cost = self.calCost(anImage, realLabel)
                     print("已经学习了", epoch, '轮, cost为', cost)
 
-    def predict(self, anImage):
-        anImage = [anImage]
+    def predict(self, imageList):
         for layer in self.layers:
-            anImage = layer.predict(anImage)
+            imageList = layer.predict(imageList)
         #            print(anImage)
-        return anImage
+        return imageList
 
     #训练过程中需要使用的预测函数，会把各层的输出保留起来，用于计算梯度和误差
     def predict4Train(self, anImage):
@@ -88,23 +90,23 @@ class CNNSoftmax():
     # 计算损失值
     def calCost(self, trainingImageList, trainingLabelList):
         cost = 0
-        for j in range(len(trainingImageList)):
-            predLabel = self.predict([trainingImageList[j]])
-            realLabel = trainingLabelList[j]
-            for i in range(self.classNum): cost -= realLabel[i] * np.log(predLabel[i])
-        print("损失值是", cost)
+        predLabel = self.predict(trainingImageList)
+        for i in range(self.classNum): cost -= trainingLabelList[i] * np.log(predLabel[i] + 0.0000001)
+        return cost
 
 
 
 if __name__ == '__main__':
     #     loadData()
     #     testInput, testOutput, trainInput, trainOutPut = loadSimpleData()
-    testInput, testOutput = loadImageOfSix()
+    testInputList, testOutput = loadImageOfSix()
     #     print(testOutput[:3])
     #     cnn = CNN(kernelNum=5, colStride=2, receptiveFieldSize=3, poolingSize=2, poolingStride=2)
     #     cnn.calOutput(testInput)
+    testInputList = np.array(testInputList)
     clf = CNNSoftmax([6, 6], 10)
-    clf.fit(testInput, testOutput)
-    pred = clf.predict(testInput[0])
-    print(pred)
+    clf.fit(testInputList, testOutput)
+    testInputList = testInputList.reshape((1, 1, testInputList.shape[1],testInputList.shape[2]))
+#     pred = clf.predict(testInputList)
+#     print(pred)
 
