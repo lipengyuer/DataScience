@@ -42,6 +42,8 @@ class CNN():
         kernelNumOfFormerLayer = self.outputShapeOFFormerLayer[0]
         inputImageNumFromFormerLayer = self.outputShapeOFFormerLayer[1]
         height, width = self.outputShapeOFFormerLayer[2], self.outputShapeOFFormerLayer[3]
+#         print("上一层的图片尺寸是", height, width)
+
         imageList = np.zeros((kernelNumOfFormerLayer, inputImageNumFromFormerLayer, height, width))
         outputImageList = self.predict(imageList)
         self.outputShape= outputImageList.shape
@@ -53,18 +55,21 @@ class CNN():
         kernelNumOfFormerLayer, inputImageNumOfFormerLayer, inputImageHeightOfFormerLayer, inputImageWidthOfFormerLayer = \
             inputImageList.shape
         oriHeight, oriWidth = inputImageHeightOfFormerLayer, inputImageWidthOfFormerLayer
-        newHeight = np.ceil(oriHeight/self.colStride)*self.colStride
-        newWidth = np.ceil(oriWidth/self.colStride)*self.colStride
+        newHeight = np.ceil((oriHeight - self.receptiveFieldSize)/self.colStride)*self.colStride + self.receptiveFieldSize
+        newWidth = np.ceil((oriWidth - self.receptiveFieldSize)/self.colStride)*self.colStride + self.receptiveFieldSize
         newHeight, newWidth = int(newHeight), int(newWidth)
-        for i in range(0, kernelNumOfFormerLayer, self.colStride):
-            tempImageList4ThisKernel = []
-            for j in range(0, inputImageNumOfFormerLayer, self.colStride):
-                anImage = inputImageList[i, j, :, :]
-                newImage = np.zeros((newHeight, newWidth))#创建一个0矩阵，尺寸与填充后的图像大小相同
-                newImage[0: oriHeight, 0: oriWidth] = anImage#把原始图像覆盖到0矩阵的中心位置
-                tempImageList4ThisKernel.append(newImage)
-            newImageList.append(tempImageList4ThisKernel)
-        newImageList = np.array(newImageList)
+        newImageList = np.zeros((kernelNumOfFormerLayer, inputImageNumOfFormerLayer, newHeight, newWidth))
+        newImageList[:, :, 0:oriHeight, 0: oriWidth] = inputImageList
+#         for i in range(0, kernelNumOfFormerLayer, self.colStride):
+#             tempImageList4ThisKernel = []
+#             for j in range(0, inputImageNumOfFormerLayer, self.colStride):
+#                 anImage = inputImageList[i, j, :, :]
+#                 newImage = np.zeros((newHeight, newWidth))#创建一个0矩阵，尺寸与填充后的图像大小相同
+# #                 print(newImage.shape, newHeight, newWidth, anImage.shape)
+#                 newImage[0: oriHeight, 0: oriWidth] = anImage#把原始图像覆盖到0矩阵的中心位置
+#                 tempImageList4ThisKernel.append(newImage)
+#             newImageList.append(tempImageList4ThisKernel)
+#         newImageList = np.array(newImageList)
         return newImageList
     #激活函数
     def relu(self, regressionRes):
@@ -73,12 +78,17 @@ class CNN():
         
     def colIt(self, newImage, oriHeight, oriWidth, weightMatrix, bias, stride):#对图像进行卷积
         outputImage = []#直接用list来接收结果，算是一种偷懒的做法；效率更高的是创建尺寸合适的np.array
-        for i in range(0, oriHeight, stride):
+        h = oriHeight-self.receptiveFieldSize
+        if h==0: h = 1
+        w = oriWidth-self.receptiveFieldSize
+        if w==0: w = 1
+        for i in range(0, h, stride):
             tempList = []
-            for j in range(0, oriWidth, stride):
-                pointsInField = newImage[i: i+stride, j: j+stride]
-#                 print(np.sum(pointsInField*weightMatrix) + bias)
-#                 print(np.sum(pointsInField*weightMatrix))
+            for j in range(0, w, stride):
+                pointsInField = newImage[i: i+self.receptiveFieldSize, j: j+self.receptiveFieldSize]
+#                 print(i, j, pointsInField)
+#                 print(i, j, weightMatrix)
+#                 print(i,j, newImage.shape, oriWidth-stride)
                 output = self.relu(np.sum(pointsInField*weightMatrix) + bias)
                 tempList.append(output)
             outputImage.append(tempList)
@@ -89,12 +99,15 @@ class CNN():
         oriHeight, oriWidth = oriImage.shape
         newHeight = np.ceil(oriHeight/self.poolingStride)*self.poolingStride
         newWidth = np.ceil(oriWidth/self.poolingStride)*self.poolingStride
+#         newHeight = int((oriHeight - halfReceptiveFieldSize)/self.colStride)*self.colStride + self.colStride + 1
+#         newWidth = int((oriWidth - halfReceptiveFieldSize)/self.colStride)*self.colStride + self.colStride + 1
         newHeight, newWidth  = int(newHeight), int(newWidth)
         newImage = np.zeros((newHeight, newWidth))#创建一个0矩阵，尺寸与填充后的图像大小相同
         newImage[0: oriHeight, 0: oriWidth] = oriImage#把原始图像覆盖到0矩阵的中心位置
         return newImage
 
     def pooling(self, anImage):#采样窗口和步长是随意设置的，需要这里自动适应
+#         print("图片的形状是", anImage.shape)
         oriHeight, oriWidth = anImage.shape
         newImage = []
         padImage = self.padding4Pooling(anImage)
@@ -146,10 +159,13 @@ class CNN():
             imageIndexOfThisKernel = self.imageIndexOfEachKernel[i]
             start, end = imageIndexOfThisKernel[0], imageIndexOfThisKernel[-1]
             tempImageList = []#存储当前神经元扫描各个图片得到的结果
+#             print("前一层的卷积个个数是", kernelNumOfFormerLayer)
             for j in range(kernelNumOfFormerLayer):#遍历上一层的每一个卷积核
                 for index in range(start, end+1):
-                    anImage = newInputImageList[j, index, :, :]#取出上一层每一个神经元输出的图片中，分给当前层的这个神经元的图片
+#                     print(newInputImageList.shape, j, index)
+                    anImage = newInputImageList[j, index, :, :]#取出前一层每一个神经元输出的图片中，分给当前层的这个神经元的图片
                     outputImage = self.colIt(anImage, oriHeight, oriWidth, self.weightListOfKernels[i],self.biasList[i], self.colStride)
+#                     print(i, j, "卷积的结果是", outputImage)
                     outputImage = self.pooling(outputImage)
 #                     print("池化之后的图片是", outputImage)
     #                 print("###################")
@@ -205,10 +221,12 @@ class CNN():
         _, _, kernelOutputHeight, kernelOutputWidth = self.trainingColOutput.shape
         #首先基于池化层输出误差，反推计算卷积核输出像素点的误差。我们统一使用mean pooling
         kernelOutput = np.zeros(self.trainingColOutput.shape)
-        for i in range(0, outputHeight, self.poolingStride):#遍历一副图像的所有像素点(不包括填充部分)
-            for j in range(0, outputWidth, self.poolingStride):
-                kernelOutput[:, :, i: i +  self.poolingStride, j: j+  self.poolingStride] = \
-                                  np.ones(( self.poolingStride,  self.poolingStride))* errorFromLaterLayer[:, :, i,j]
+        for m in range(kernelOutput.shape[0]):
+            for n in range(kernelOutput.shape[1]):
+                for i in range(0, outputHeight, self.poolingStride):#遍历一副图像的所有像素点(不包括填充部分)
+                    for j in range(0, outputWidth, self.poolingStride):
+                        kernelOutput[m, n, i: i +  self.poolingStride, j: j+  self.poolingStride] = \
+                                          np.ones(( self.poolingStride,  self.poolingStride))* errorFromLaterLayer[m, n, i,j]
 #         print("基于池化层输出复原得到的图片是", kernelOutput)
         
         #接下来，基于池化层的输入，也就是卷积层的输出，来计算反向传播到前一层的误差
@@ -216,13 +234,17 @@ class CNN():
         for i in range(kernelNumOfFormerLayer):
             for j in range(picNumOfFormerLayer):
                 indexList = self.kernelIndex4EachInputImage[j]#这个图片对应的后一层的卷积核索引
-                for m in range(formerOutputHeight):
-                    for n in range(formerOutputWidth):
+                for m in range(0, formerOutputHeight - self.receptiveFieldSize, self.colStride):
+                    for n in range(0, formerOutputWidth - self.receptiveFieldSize, self.colStride):
                         for laterKernelIndex in indexList:
                             outputOfThisKernel = kernelOutput[laterKernelIndex]
+#                             print(outputOfThisKernel.shape, j, m, n)
+#                             print(m/self.colStride)
                             self.error2FormerLayer[i, j , m, n] += \
-                                self.traningInput[i, j, m, n]* outputOfThisKernel[j, m, n]
+                                self.traningInput[i, j, m, n]* outputOfThisKernel[j, \
+                                                      int(m/self.colStride), int(n/self.colStride)]
                                 
+        #计算这层卷积核的参数的梯度               
         self.grad = np.zeros(self.weightListOfKernels.shape)
         for m in range(kernelNumOfThisLayer):
 #             print(kernelNumOfThisLayer, self.weightListOfKernels.shape)
@@ -245,7 +267,12 @@ class CNN():
         # print("本次更新参数使用 的梯度是",self.grad * self.learningRate )
         # print("当前的参数是", self.weightListOfKernels)
         self.weightListOfKernels -= self.grad * self.learningRate
-                            
+
+    def updateWeights4Multi(self, grad):
+        # print("CNN", self.__dict__.keys())
+        # print("本次更新参数使用 的梯度是",self.grad * self.learningRate )
+        # print("当前的参数是", self.weightListOfKernels)
+        self.weightListOfKernels -= grad * self.learningRate                           
                         
                         
                 

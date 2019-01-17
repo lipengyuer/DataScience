@@ -161,6 +161,11 @@ class Softmax4CNN():#需要为cnn的输出做一些改动，比如需要将cnn�
     
     def updateWeights(self):
         self.weights -= self.grad * self.learningRate
+        
+    def updateWeights4Multi(self, grad):
+#         print("softmax更新参数", self)
+        self.weights -= grad * self.learningRate  
+        
     # 计算一个观测值的输出
     def predict(self, inputImageList):
         inputData = np.array(inputImageList).reshape((1, self.parNum))
