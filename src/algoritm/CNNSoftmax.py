@@ -58,12 +58,12 @@ class CNNSoftmax():
     def createNetwork(self):  # 可以在
         print("开始初始化网络")
         cnnLayer1 = CNN([1, 1, self.picShape[0], self.picShape[1]],
-                        kernelNum=20, colStride=2, receptiveFieldSize=3, \
+                        kernelNum=15, colStride=2, receptiveFieldSize=3, \
                         poolingSize=2, poolingStride=2, learningRate=self.learningRate)
         print("第一个卷积层的输出形状是", cnnLayer1.outputShape)
 
         cnnLayer2 = CNN(cnnLayer1.outputShape, 
-                        kernelNum=10, colStride=1, receptiveFieldSize=3, \
+                        kernelNum=6, colStride=1, receptiveFieldSize=3, \
                         poolingSize=2, poolingStride=2, learningRate=self.learningRate)
     
         print("第二个卷积层的输出形状是", cnnLayer2.outputShape)
@@ -133,11 +133,11 @@ class CNNSoftmax():
         trainingImageListOri, trainingLabelListOri = trainingImageList, trainingLabelList
         from multiprocessing import Pool
         batchSzie = 100
-        sliceSize = 10
+        sliceSize = 800
         initLearningRate = self.learningRate
         print("完成数据准备")
         for epoch in range(self.epochNum):
-            for m in range(0, trainingImageList.shape[0], sliceSize):
+            for m in range(0, trainingImageListOri.shape[0], sliceSize):
                 trainingImageList, trainingLabelList = trainingImageListOri[m:m+sliceSize], trainingLabelListOri[m:m+sliceSize]
     #                                    self.shuffleData(trainingImageListOri, trainingLabelListOri, rate=0.1)
                 sampleSize = trainingImageListOri.shape[0]
@@ -165,9 +165,15 @@ class CNNSoftmax():
                 self.learningRate = initLearningRate * ( 1/(1 + np.exp(-0.5 * (self.epochNum - epoch))))
 #                 self.learningRate = initLearningRate/(epoch + 1)#np.sqrt(epoch)
                 self.updateWeights4Multi(gradData)
+                if m % 200 == 0:
+                    cost = self.calCost(trainingImageList, trainingLabelBatch)
+                    print('cost为', cost)
             if epoch%1==0:
                 cost = self.calCost(trainingImageList, trainingLabelBatch)
                 print("完成了本轮的训练", epoch, '轮, cost为', cost)
+            if epoch%100==0:
+                import pickle
+                pickle.dump(self, open('cnnsoftmax.pkl', 'wb'))
             
             
     def predict(self, imageList):
@@ -187,7 +193,7 @@ class CNNSoftmax():
     # 计算损失值
     def calCost(self, trainingImageList, trainingLabelList):
         cost = 0
-        for j in range(min([50, trainingImageList.shape[0]])):
+        for j in range(min([20, trainingImageList.shape[0]])):
             anImage = trainingImageList[j].reshape((1, 1,  trainingImageList[j].shape[0],  trainingImageList[j].shape[1]))#CNN的输入，第一维对应的是上一层的卷积核，
             label = trainingLabelList[j]
             predLabel = self.predict4Train(anImage)
@@ -224,13 +230,13 @@ def test2():
     from sklearn.model_selection import train_test_split
     mnist = input_data.read_data_sets('../../data/mnist', one_hot=True)
 
-    inputData = mnist.test.images[:, :].reshape((-1, 28, 28))
-    outputData = mnist.test.labels[:, :]
+    inputData = mnist.train.images[:, :].reshape((-1, 28, 28))
+    outputData = mnist.train.labels[:, :]
     trainingInput, testInput, traingOutput, testOutput = \
-        train_test_split(inputData, outputData, test_size=0.5)
+        train_test_split(inputData, outputData, test_size=0.1)
     print(trainingInput.shape)
     clf = CNNSoftmax([inputData.shape[1],inputData.shape[2]], 10,\
-                     epochNum=1000, learningRate=0.01, workerNum=10)
+                     epochNum=1000, learningRate=0.1, workerNum=8)
 #     clf.fit(trainingInput, traingOutput)
     clf.fit_multi(trainingInput, traingOutput)
     accuracy = [0,0]

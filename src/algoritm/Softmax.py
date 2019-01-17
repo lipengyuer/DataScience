@@ -233,7 +233,7 @@ dataStr = """5.1,3.5,1.4,0.2,Iris-setosa
 6.2,2.8,4.8,1.8,Iris-virginica
 6.1,3.0,4.9,1.8,Iris-virginica
 6.4,2.8,5.6,2.1,Iris-virginica"""
-from sklearn.cross_validation import train_test_split
+from sklearn.model_selection import train_test_split
 if __name__ == '__main__':
     fileName = 'iris.data'
     lines = dataStr.split('\n')
