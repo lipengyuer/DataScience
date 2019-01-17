@@ -136,6 +136,7 @@ class CNNSoftmax():
         sliceSize = 800
         initLearningRate = self.learningRate
         print("完成数据准备")
+        check_point = 0
         for epoch in range(self.epochNum):
             for m in range(0, trainingImageListOri.shape[0], sliceSize):
                 trainingImageList, trainingLabelList = trainingImageListOri[m:m+sliceSize], trainingLabelListOri[m:m+sliceSize]
@@ -162,16 +163,17 @@ class CNNSoftmax():
                             gradData[i] += gradDataListTemp.layers[i].grad/sampleSize
                         
     #             print("梯度是", gradData)
-                self.learningRate = initLearningRate * ( 1/(1 + np.exp(-0.5 * (self.epochNum - epoch))))
+                self.learningRate = initLearningRate * ( 1/(1 + np.exp(-0.5 * (1 - epoch**0.5))))
 #                 self.learningRate = initLearningRate/(epoch + 1)#np.sqrt(epoch)
                 self.updateWeights4Multi(gradData)
+                check_point += 1
                 if m % 200 == 0:
                     cost = self.calCost(trainingImageList, trainingLabelBatch)
                     print('cost为', cost)
             if epoch%1==0:
                 cost = self.calCost(trainingImageList, trainingLabelBatch)
                 print("完成了本轮的训练", epoch, '轮, cost为', cost)
-            if epoch%100==0:
+            if check_point%100==0:
                 import pickle
                 pickle.dump(self, open('cnnsoftmax.pkl', 'wb'))
             
@@ -230,13 +232,13 @@ def test2():
     from sklearn.model_selection import train_test_split
     mnist = input_data.read_data_sets('../../data/mnist', one_hot=True)
 
-    inputData = mnist.train.images[:, :].reshape((-1, 28, 28))
-    outputData = mnist.train.labels[:, :]
+    inputData = mnist.test.images[:, :].reshape((-1, 28, 28))
+    outputData = mnist.test.labels[:, :]
     trainingInput, testInput, traingOutput, testOutput = \
         train_test_split(inputData, outputData, test_size=0.1)
     print(trainingInput.shape)
     clf = CNNSoftmax([inputData.shape[1],inputData.shape[2]], 10,\
-                     epochNum=1000, learningRate=0.1, workerNum=8)
+                     epochNum=1000, learningRate=0.01, workerNum=8)
 #     clf.fit(trainingInput, traingOutput)
     clf.fit_multi(trainingInput, traingOutput)
     accuracy = [0,0]
