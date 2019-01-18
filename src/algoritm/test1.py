@@ -1,49 +1,12 @@
+
+import pickle
+import numpy as np
 from Softmax import Softmax4CNN
 import pickle
 import numpy as np
 import random, copy
 from CNN import CNN
 import time
-# 加载手写体数字识别数据集
-def loadData():
-    import tensorflow as tf
-    data = tf.contrib.learn.python.learn.datasets.mnist.read_data_sets('../../data/mnist/', one_hot=True)
-    testData = data.test
-    trainData = data.train
-    testInput, testOutput = testData.images, testData.labels
-    trainInput, trainOutPut = trainData.images, trainData.labels
-    simpleDataSet = [testInput[0:10], testOutput[0:10], trainInput[0:10], trainOutPut[0:10]]
-    pickle.dump(simpleDataSet, open('simpleMnist.pkl', 'wb'))
-
-
-def loadSimpleData():
-    [testInput, testOutput, trainInput, trainOutPut] = pickle.load(open('simpleMnist.pkl', 'rb'))
-    return testInput, testOutput, trainInput, trainOutPut
-
-
-def loadImageOfSix():
-    imageOfSix = [[1,1,1,1, 1, 1, 1, 1, 1],
-                  [1,0,0,0, 0, 0, 0, 0, 0],
-                  [1,0,0,0, 0, 0, 0, 0, 0],
-                  [1,0,0,0, 0, 0, 0, 0, 0],
-                  [1,1,1,1, 1, 1, 1, 1, 1],
-                  [1,0,0,0, 0, 0, 0, 0, 1],
-                  [1,0,0,0, 0, 0, 0, 0, 1],
-                  [1,0,0,0, 0, 0, 0, 0, 1],
-                  [1, 1,1,1, 1, 1, 1, 1, 1]]
-
-    imageOfSeven = [[1,1,1,1, 1, 1, 1, 1, 1],
-                    [1,0,0,0, 0, 0, 0, 0, 1],
-                    [1,0,0,0, 0, 0, 0, 0, 1],
-                    [1,0,0,0, 0, 0, 0, 0, 1],
-                    [1,1,1,1, 1, 1, 1, 1, 1],
-                    [0,0,0,0, 0, 0, 0, 0, 1],
-                    [0,0,0,0, 0, 0, 0, 0, 1],
-                    [0,0,0,0, 0, 0, 0, 0, 1],
-                    [1,1,1,1, 1, 1, 1, 1, 1]]
-    imageOfSix = np.array(imageOfSix)
-    return [imageOfSix, imageOfSeven], \
-              [[0, 0, 0, 0, 0, 0, 1, 0, 0, 0],[0, 0, 0, 0, 0, 0, 0, 0, 0, 1]]
 
 class CNNSoftmax():
     def __init__(self, picShape, classNum, epochNum=1, learningRate = 0.001,  workerNum = 3):
@@ -217,21 +180,6 @@ def calGrad4Multi(self, trainingImageList, trainingLabelList):
         self.calGrad(anImage, realLabel)
     return self
 
-def test1():
-    #     loadData()
-    #     testInput, testOutput, trainInput, trainOutPut = loadSimpleData()
-    testInputList, testOutput = loadImageOfSix()
-    #     print(testOutput[:3])
-    #     cnn = CNN(kernelNum=5, colStride=2, receptiveFieldSize=3, poolingSize=2, poolingStride=2)
-    #     cnn.calOutput(testInput)
-    testInputList = np.array(testInputList)
-    print(testInputList.shape)
-    clf = CNNSoftmax([testInputList.shape[1],testInputList.shape[2]], 10,\
-                     epochNum=100, learningRate=0.0000001)
-    clf.fit(testInputList, testOutput)
-    testInputList = testInputList[1].reshape((1, 1, testInputList.shape[1],testInputList.shape[2]))
-    pred = clf.predict(testInputList)
-    print(pred)
 
 def test2():
     from tensorflow.examples.tutorials.mnist import input_data
@@ -241,14 +189,12 @@ def test2():
     inputData = mnist.test.images[:, :].reshape((-1, 28, 28))
     outputData = mnist.test.labels[:, :]
     trainingInput, testInput, traingOutput, testOutput = \
-        train_test_split(inputData, outputData, test_size=0.999)
+        train_test_split(inputData, outputData, test_size=0.8)
     print(trainingInput.shape)
-    clf = CNNSoftmax([inputData.shape[1],inputData.shape[2]], 10,\
-                     epochNum=1, learningRate=0.1, workerNum=5)
+    with open('cnnsoftmax.pkl','rb') as f:
+        clf = pickle.load(f)
 #     clf.fit(trainingInput, traingOutput)
-    clf.fit_multi(trainingInput, traingOutput)
-    with open('cnnsoftmax.pkl', 'wb') as f:
-        pickle.dump(clf, f)
+#     clf.fit_multi(trainingInput, traingOutput)
     accuracy = [0,0]
 #     testInput, testOutput = trainingInput, traingOutput
     for i in range(min(1000, testInput.shape[0])):
@@ -258,9 +204,11 @@ def test2():
             accuracy[0] += 1
         accuracy[1] += 1
         print(accuracy, np.argmax(pred), np.argmax(testOutput[i]))
-
+        
+        
 if __name__ == '__main__':
     test2()
+    
 
 
 
