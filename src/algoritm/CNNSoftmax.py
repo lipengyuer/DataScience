@@ -114,26 +114,30 @@ class CNNSoftmax():
 #                 print("本次使用的梯度是", self.layers[0].grad)
                 # print(self.layers[0].__dict__.keys())
                 self.updateWeights()
-#                 if i % 500 == 0:
-# #                     print('asdasdasd', trainingImageList)
-#                     cost = self.calCost(trainingImageList, trainingLabelList)
-#                     print("已经学习了", epoch, '轮, cost为', cost,\
-#                           '本轮的进度是',  i, '/', len(trainingImageList))
+                if i % 500 == 0:
+#                     print('asdasdasd', trainingImageList)
+                    cost = self.calCost(trainingImageList, trainingLabelList)
+                    print("已经学习了", epoch, '轮, cost为', cost,\
+                          '本轮的进度是',  i, '/', len(trainingImageList))
+                    import pickle
+                    pickle.dump(self, open('cnnsoftmax.pkl', 'wb'))
+#                 print(self.layers[0].weightListOfKernels[0,0,0])
+                # print(self.layers[2].weights[0,0])
             cost = self.calCost(trainingImageList, trainingLabelList)
             print("完成了本轮的训练", epoch, '轮, cost为', cost)
     
     # 更新参数
-    def updateWeights4Multi(self, gradList):
+    def updateWeights4Multi(self, gradList, grad4BiasData):
         for i in range(len(self.layers)):
             # print("正在更新第", i, '层的参数')
-            self.layers[i].updateWeights4Multi(gradList[i])
+            self.layers[i].updateWeights4Multi(gradList[i], grad4BiasData[i])
             
     def fit_multi(self, trainingImageList, trainingLabelList):
         print("开始训练")
         trainingImageListOri, trainingLabelListOri = trainingImageList, trainingLabelList
         from multiprocessing import Pool
         batchSzie = 20
-        sliceSize = 100
+        sliceSize = 160
         initLearningRate = self.learningRate
         print("完成数据准备")
         check_point = 0
@@ -143,7 +147,6 @@ class CNNSoftmax():
             trainingImageListOri, trainingLabelListOri = \
                                  self.shuffleData(trainingImageListOri, trainingLabelListOri, rate=1)
             for m in range(0, trainingImageListOri.shape[0], sliceSize):
-                
                 trainingImageList, trainingLabelList = trainingImageListOri[m:m+sliceSize], trainingLabelListOri[m:m+sliceSize]
     #                                    self.shuffleData(trainingImageListOri, trainingLabelListOri, rate=0.1)
                 sampleSize = trainingImageListOri.shape[0]
@@ -157,31 +160,38 @@ class CNNSoftmax():
                 pool.close()
                 pool.join()
                 gradData = [1 for _ in range(len(self.layers))]
+                grad4BiasData = [1 for _ in range(len(self.layers))]
                 for res in resList[0:]:
                     gradDataListTemp = res.get()
                     for i in range(len(self.layers)):
     #                     print("各层的对象名是", gradDataListTemp.layers[i])
                         if type(gradData[i])==int: 
                             gradData[i] = gradDataListTemp.layers[i].grad/sampleSize
+                            grad4BiasData[i] = gradDataListTemp.layers[i].grad4Bias/sampleSize
                         else: 
     #                         print(i, gradData[i].shape, gradDataListTemp.layers[i].grad.shape)
                             gradData[i] += gradDataListTemp.layers[i].grad/sampleSize
+                            grad4BiasData[i] += gradDataListTemp.layers[i].grad4Bias / sampleSize
                         
     #             print("梯度是", gradData)
                 self.learningRate = initLearningRate * ( 1/(1 + np.exp(-0.5 * (1 - epoch**0.5))))
 #                 self.learningRate = initLearningRate/(epoch + 1)#np.sqrt(epoch)
-                self.updateWeights4Multi(gradData)
+                self.updateWeights4Multi(gradData, grad4BiasData)
+                # print(self.layers[0].weightListOfKernels[0,0,0])
+                # print(self.layers[2].weights[0,0])
+
                 check_point += 1
-                if m % 200 == 0:
+                if m % 2000 == 0:
                     cost = self.calCost(trainingImageList, trainingLabelBatch)
                     print('cost为', cost)
             t2 = time.time()
-            if epoch%1==0:
+            if epoch%5==0:
                 cost = self.calCost(trainingImageList, trainingLabelBatch)
                 print("完成了本轮的训练", epoch, '轮, 耗时是', int(t2-t1) , 'cost为', cost)
-#             if check_point%100==0:
-#                 import pickle
-#                 pickle.dump(self, open('cnnsoftmax.pkl', 'wb'))
+                import pickle
+                pickle.dump(self, open('cnnsoftmax.pkl', 'wb'))
+            # if check_point%100==0:
+
             
             
     def predict(self, imageList):
@@ -234,6 +244,7 @@ def test1():
     print(pred)
 
 def test2():
+
     from tensorflow.examples.tutorials.mnist import input_data
     from sklearn.model_selection import train_test_split
     mnist = input_data.read_data_sets('../../data/mnist', one_hot=True)
@@ -241,11 +252,17 @@ def test2():
     inputData = mnist.test.images[:, :].reshape((-1, 28, 28))
     outputData = mnist.test.labels[:, :]
     trainingInput, testInput, traingOutput, testOutput = \
-        train_test_split(inputData, outputData, test_size=0.999)
+        train_test_split(inputData, outputData, test_size=0.1)
     print(trainingInput.shape)
-    clf = CNNSoftmax([inputData.shape[1],inputData.shape[2]], 10,\
-                     epochNum=1, learningRate=0.1, workerNum=5)
-#     clf.fit(trainingInput, traingOutput)
+    pretrain = 0
+    if pretrain==1:
+        clf = CNNSoftmax([inputData.shape[1],inputData.shape[2]], 10,\
+                     epochNum=1000, learningRate=1., workerNum=8)
+    else:
+        with open('cnnsoftmax.pkl', 'rb') as f:
+            clf = pickle.load(f)
+            clf.learningRate = 0.001
+    # clf.fit(trainingInput, traingOutput)
     clf.fit_multi(trainingInput, traingOutput)
     with open('cnnsoftmax.pkl', 'wb') as f:
         pickle.dump(clf, f)

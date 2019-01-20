@@ -19,6 +19,7 @@ class CNN():
         self.weightListOfKernels = []#存储每个卷积核的权重矩阵
         self.biasList = []#存储每个卷积核的偏置
         self.grad = None
+        self.grad4Bias = None
         self.outputShape = None#输出图像的个数,#输出图像的形状用于提供给后一层CNN来做相关尺寸的计算，从而推算出最后一层CNN的输出尺寸
         #用来初始化softmax的权重向量
         #初始化参数
@@ -32,26 +33,23 @@ class CNN():
             self.biasList.append(bias)
         # print(self.weightListOfKernels, self.biasList)
         self.weightListOfKernels = np.array(self.weightListOfKernels)
+        self.grad = np.zeros(self.weightListOfKernels.shape)
         self.biasList = np.array(self.biasList)
+        self.grad4Bias = np.array(self.biasList)
         self.calOutputInfo()
 
     #基于出入图像的尺寸和数量，以及卷积核等的情况，计算输出的图像的个数和尺寸
     def calOutputInfo(self):
         #生成来自上一层的模拟数据
-#         print(self.outputShapeOFFormerLayer)
         kernelNumOfFormerLayer = self.outputShapeOFFormerLayer[0]
         inputImageNumFromFormerLayer = self.outputShapeOFFormerLayer[1]
         height, width = self.outputShapeOFFormerLayer[2], self.outputShapeOFFormerLayer[3]
-#         print("上一层的图片尺寸是", height, width)
 
         imageList = np.zeros((kernelNumOfFormerLayer, inputImageNumFromFormerLayer, height, width))
         outputImageList = self.predict(imageList)
         self.outputShape= outputImageList.shape
         
     def padding(self, inputImageList):#对图像进行填充
-        newImageList = []
-#         print(inputImageList)
-#         print('shape', inputImageList.shape)
         kernelNumOfFormerLayer, inputImageNumOfFormerLayer, inputImageHeightOfFormerLayer, inputImageWidthOfFormerLayer = \
             inputImageList.shape
         oriHeight, oriWidth = inputImageHeightOfFormerLayer, inputImageWidthOfFormerLayer
@@ -86,9 +84,6 @@ class CNN():
             tempList = []
             for j in range(0, w, stride):
                 pointsInField = newImage[i: i+self.receptiveFieldSize, j: j+self.receptiveFieldSize]
-#                 print(i, j, pointsInField)
-#                 print(i, j, weightMatrix)
-#                 print(i,j, newImage.shape, oriWidth-stride)
                 output = self.relu(np.sum(pointsInField*weightMatrix) + bias)
                 tempList.append(output)
             outputImage.append(tempList)
@@ -245,7 +240,7 @@ class CNN():
                                                       int(m/self.colStride), int(n/self.colStride)]
                                 
         #计算这层卷积核的参数的梯度               
-        self.grad = np.zeros(self.weightListOfKernels.shape)
+        # self.grad = np.zeros(self.weightListOfKernels.shape)
         for m in range(kernelNumOfThisLayer):
 #             print(kernelNumOfThisLayer, self.weightListOfKernels.shape)
             weights = self.weightListOfKernels[m]
@@ -253,26 +248,35 @@ class CNN():
             for i in range(weights.shape[0]):
                 for j in range(weights.shape[1]):
                     tempGrad = 0
+                    tempGrad4Bias = 0
                     #遍历输入图像，把这个权重的梯度算出来
-                    for dim2 in range(errorFromLaterLayer[m].shape[0]):#遍历这个卷积核输出的所有图片
-                        for dim3 in range(0, errorFromLaterLayer[m].shape[1]):
-                            for dim4 in range(0, errorFromLaterLayer[m].shape[2]):
-#                                 print('asdasdaqweqw', errorFromLaterLayer[m].shape)
-#                                 print(m, dim2, dim3, dim4)
-                                tempGrad += weights[i, j] * errorFromLaterLayer[m, dim2, dim3, dim4]
-                    self.grad[m,i,j] = tempGrad
+                    tempGrad += weights[i, j] * np.sum(errorFromLaterLayer[m])
+                    tempGrad4Bias +=np.sum(errorFromLaterLayer[m])
+#                     for dim2 in range(errorFromLaterLayer[m].shape[0]):#遍历这个卷积核输出的所有图片
+#                         for dim3 in range(0, errorFromLaterLayer[m].shape[1]):
+#                             for dim4 in range(0, errorFromLaterLayer[m].shape[2]):
+# #                                 print('asdasdaqweqw', errorFromLaterLayer[m].shape)
+# #                                 print(m, dim2, dim3, dim4)
+#                                 tempGrad += weights[i, j] * errorFromLaterLayer[m, dim2, dim3, dim4]
+#                                 tempGrad4Bias
+                    self.grad[m,i,j] = tempGrad + 0.1*self.grad[m,i,j]
+                    self.grad4Bias[m] = tempGrad4Bias + 0.1*self.grad4Bias[m]
+
 #         print("计算得到的梯度是", self.grad)
-    def updateWeights(self):
+    def updateWeights(self,):
         # print("CNN", self.__dict__.keys())
         # print("本次更新参数使用 的梯度是",self.grad * self.learningRate )
         # print("当前的参数是", self.weightListOfKernels)
         self.weightListOfKernels -= self.grad * self.learningRate
+        self.biasList -= self.grad4Bias * self.learningRate
 
-    def updateWeights4Multi(self, grad):
+    def updateWeights4Multi(self, grad, grad4Bias):
         # print("CNN", self.__dict__.keys())
         # print("本次更新参数使用 的梯度是",self.grad * self.learningRate )
         # print("当前的参数是", self.weightListOfKernels)
-        self.weightListOfKernels -= grad * self.learningRate                           
+        self.weightListOfKernels -= grad * self.learningRate
+        self.biasList -= grad4Bias * self.learningRate
+
                         
                         
                 

@@ -17,6 +17,9 @@ class Softmax():
         self.diffFuctions = []#存储每个变量对应方向的偏导数
         self.learningRate = learningRate#学习率。这里每个参数的学习率是一样的；我们也可以为各个参数设置不同的学习率。
         self.stepNum = stepNum#每一批数据学习的步数
+
+        self.grad = None
+        self.grad4Bias = None
         
         
     def fit(self, trainInput, trainOutput):
@@ -135,6 +138,7 @@ class Softmax4CNN():#需要为cnn的输出做一些改动，比如需要将cnn�
         self.grad = np.array(self.weights)#梯度矩阵和权重矩阵shape相同
         self.bias = [random.uniform(-0.2, 0.2) for j in range(self.classNum)]
         self.bias = np.array(self.bias)
+        self.grad4Bias = np.array(self.bias)
 
     def calGrad(self, outputVector):
         #print("softmax的输入是", self.trainingInput)
@@ -142,10 +146,10 @@ class Softmax4CNN():#需要为cnn的输出做一些改动，比如需要将cnn�
         predOutputVector =self.traningOutput
         for classNO in range(self.classNum):#遍历每一个类别的位置
             for i in range(self.parNum):#遍历与当前节点相连的所有特征
-                #print(inputVector[i])
                 self.grad[classNO, i] = inputVector[i] * \
-                                        (predOutputVector[classNO] - outputVector[classNO])
-                                        
+                                        (predOutputVector[classNO] - outputVector[classNO]) + 0.1*self.grad[classNO, i]
+            self.grad4Bias[classNO] = (predOutputVector[classNO] - outputVector[classNO]) + 0.1*self.grad4Bias[classNO]
+
         self.error2FormerLayer = np.zeros(self.trainingInput.shape)#softmax反向传播到前一层的误差
         indexList = np.array(range(len(inputVector)))
         indexCube = indexList.reshape(self.trainingInput.shape)#存储原始数据每一个点，在拉直后形成的一维向量中的位置
@@ -157,14 +161,17 @@ class Softmax4CNN():#需要为cnn的输出做一些改动，比如需要将cnn�
                         softmaxFeatureNO = indexCube[i,j,m,n]#当前像素点对应的softmax特征序号
                         #把与这个像素连接的所有来自后一层的误差加权球和
                         self.error2FormerLayer[i,j,m,n] = np.sum(self.weights[:, softmaxFeatureNO] * (self.traningOutput-outputVector))          
+
         return self.grad
     
     def updateWeights(self):
         self.weights -= self.grad * self.learningRate
-        
-    def updateWeights4Multi(self, grad):
+        self.grad4Bias -= self.grad4Bias* self.learningRate
+
+    def updateWeights4Multi(self, grad, grad4Bias):
 #         print("softmax更新参数", self)
-        self.weights -= grad * self.learningRate  
+        self.weights -= grad * self.learningRate
+        self.grad4Bias -= grad4Bias* self.learningRate
         
     # 计算一个观测值的输出
     def predict(self, inputImageList):
