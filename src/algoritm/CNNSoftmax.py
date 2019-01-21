@@ -136,8 +136,8 @@ class CNNSoftmax():
         print("开始训练")
         trainingImageListOri, trainingLabelListOri = trainingImageList, trainingLabelList
         from multiprocessing import Pool
-        batchSzie = 20
-        sliceSize = 160
+        sliceSize = trainingImageList.shape[0]
+        batchSzie = int(sliceSize/self.workerNum)
         initLearningRate = self.learningRate
         print("完成数据准备")
         check_point = 0
