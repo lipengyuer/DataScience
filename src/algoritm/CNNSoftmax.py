@@ -252,16 +252,16 @@ def test2():
     inputData = mnist.test.images[:, :].reshape((-1, 28, 28))
     outputData = mnist.test.labels[:, :]
     trainingInput, testInput, traingOutput, testOutput = \
-        train_test_split(inputData, outputData, test_size=0.1)
+        train_test_split(inputData, outputData, test_size=0.9)
     print(trainingInput.shape)
-    pretrain = 0
+    pretrain = 1
     if pretrain==1:
         clf = CNNSoftmax([inputData.shape[1],inputData.shape[2]], 10,\
-                     epochNum=1000, learningRate=1., workerNum=8)
+                     epochNum=1000, learningRate=0.1, workerNum=20)
     else:
         with open('cnnsoftmax.pkl', 'rb') as f:
             clf = pickle.load(f)
-            clf.learningRate = 0.001
+            clf.learningRate = 0.1
     # clf.fit(trainingInput, traingOutput)
     clf.fit_multi(trainingInput, traingOutput)
     with open('cnnsoftmax.pkl', 'wb') as f:

@@ -236,8 +236,8 @@ class CNN():
 #                             print(outputOfThisKernel.shape, j, m, n)
 #                             print(m/self.colStride)
                             self.error2FormerLayer[i, j , m, n] += \
-                                self.traningInput[i, j, m, n]* outputOfThisKernel[j, \
-                                                      int(m/self.colStride), int(n/self.colStride)]
+                                self.traningInput[i, j, m, n]* np.sum(outputOfThisKernel[:, \
+                                                      int(m/self.colStride), int(n/self.colStride)])
                                 
         #计算这层卷积核的参数的梯度               
         # self.grad = np.zeros(self.weightListOfKernels.shape)
