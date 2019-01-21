@@ -209,6 +209,60 @@ class CNN():
         outputImageList = self.traningPoolOutput
         return outputImageList
     
+#     #计算所有参数的梯度，以及反向传播给前一层所有图片像素点的误差。后一层反向传播过来的误差，是本层池化层的输出误差
+#     def calGrad(self, errorFromLaterLayer):
+#         kernelNumOfFormerLayer, picNumOfFormerLayer, formerOutputHeight, formerOutputWidth = self.traningInput.shape
+#         kernelNumOfThisLayer, picNumOfThisLayer, outputHeight, outputWidth = self.traningPoolOutput.shape
+#         _, _, kernelOutputHeight, kernelOutputWidth = self.trainingColOutput.shape
+#         #首先基于池化层输出误差，反推计算卷积核输出像素点的误差。我们统一使用mean pooling
+#         kernelOutput = np.zeros(self.trainingColOutput.shape)
+#         for m in range(kernelOutput.shape[0]):
+#             for n in range(kernelOutput.shape[1]):
+#                 for i in range(0, outputHeight, self.poolingStride):#遍历一副图像的所有像素点(不包括填充部分)
+#                     for j in range(0, outputWidth, self.poolingStride):
+#                         kernelOutput[m, n, i: i +  self.poolingStride, j: j+  self.poolingStride] = \
+#                                           np.ones(( self.poolingStride,  self.poolingStride))* errorFromLaterLayer[m, n, i,j]
+# #         print("基于池化层输出复原得到的图片是", kernelOutput)
+#         
+#         #接下来，基于池化层的输入，也就是卷积层的输出，来计算反向传播到前一层的误差
+#         self.error2FormerLayer = np.zeros(self.traningInput.shape)
+#         for i in range(kernelNumOfFormerLayer):
+#             for j in range(picNumOfFormerLayer):
+#                 indexList = self.kernelIndex4EachInputImage[j]#这个图片对应的后一层的卷积核索引
+#                 for m in range(0, formerOutputHeight - self.receptiveFieldSize, self.colStride):
+#                     for n in range(0, formerOutputWidth - self.receptiveFieldSize, self.colStride):
+#                         for laterKernelIndex in indexList:
+#                             outputOfThisKernel = kernelOutput[laterKernelIndex]
+# #                             print(outputOfThisKernel.shape, j, m, n)
+# #                             print(m/self.colStride)
+#                             self.error2FormerLayer[i, j , m, n] += \
+#                                 self.traningInput[i, j, m, n]* np.sum(outputOfThisKernel[:, \
+#                                                       int(m/self.colStride), int(n/self.colStride)])
+#                                 #主要问题在与，如何将卷积结果的像素点，与卷积核的输出对应起来。一对一是最简单的情况
+#         #计算这层卷积核的参数的梯度               
+#         # self.grad = np.zeros(self.weightListOfKernels.shape)
+#         for m in range(kernelNumOfThisLayer):
+# #             print(kernelNumOfThisLayer, self.weightListOfKernels.shape)
+#             weights = self.weightListOfKernels[m]
+#             indexList = self.imageIndexOfEachKernel[m]#这个图片对应的后一层的卷积核索引
+#             for i in range(weights.shape[0]):
+#                 for j in range(weights.shape[1]):
+#                     tempGrad = 0
+#                     tempGrad4Bias = 0
+#                     #遍历输入图像，把这个权重的梯度算出来
+#                     tempGrad += weights[i, j] * np.sum(errorFromLaterLayer[m])
+#                     tempGrad4Bias +=np.sum(errorFromLaterLayer[m])
+# #                     for dim2 in range(errorFromLaterLayer[m].shape[0]):#遍历这个卷积核输出的所有图片
+# #                         for dim3 in range(0, errorFromLaterLayer[m].shape[1]):
+# #                             for dim4 in range(0, errorFromLaterLayer[m].shape[2]):
+# # #                                 print('asdasdaqweqw', errorFromLaterLayer[m].shape)
+# # #                                 print(m, dim2, dim3, dim4)
+# #                                 tempGrad += weights[i, j] * errorFromLaterLayer[m, dim2, dim3, dim4]
+# #                                 tempGrad4Bias
+#                     self.grad[m,i,j] = tempGrad + 0.1*self.grad[m,i,j]
+#                     self.grad4Bias[m] = tempGrad4Bias + 0.1*self.grad4Bias[m]
+
+
     #计算所有参数的梯度，以及反向传播给前一层所有图片像素点的误差。后一层反向传播过来的误差，是本层池化层的输出误差
     def calGrad(self, errorFromLaterLayer):
         kernelNumOfFormerLayer, picNumOfFormerLayer, formerOutputHeight, formerOutputWidth = self.traningInput.shape
@@ -226,19 +280,19 @@ class CNN():
         
         #接下来，基于池化层的输入，也就是卷积层的输出，来计算反向传播到前一层的误差
         self.error2FormerLayer = np.zeros(self.traningInput.shape)
-        for i in range(kernelNumOfFormerLayer):
-            for j in range(picNumOfFormerLayer):
-                indexList = self.kernelIndex4EachInputImage[j]#这个图片对应的后一层的卷积核索引
-                for m in range(0, formerOutputHeight - self.receptiveFieldSize, self.colStride):
-                    for n in range(0, formerOutputWidth - self.receptiveFieldSize, self.colStride):
-                        for laterKernelIndex in indexList:
-                            outputOfThisKernel = kernelOutput[laterKernelIndex]
-#                             print(outputOfThisKernel.shape, j, m, n)
-#                             print(m/self.colStride)
-                            self.error2FormerLayer[i, j , m, n] += \
-                                self.traningInput[i, j, m, n]* np.sum(outputOfThisKernel[:, \
-                                                      int(m/self.colStride), int(n/self.colStride)])
-                                
+        for i in range(kernelOutput.shape[0]):#遍历本层卷积核
+            imageIndex = self.imageIndexOfEachKernel[i]
+            start, end = imageIndex[0], imageIndex[-1]
+            for j in range(kernelOutput.shape[1]):#遍历本层卷积核输出的各个图像
+                for h in range(kernelOutput.shape[2]):#遍历输出的像素点:
+                    for b in range(kernelOutput.shape[3]):
+                        for NO in range(start, end +1):
+                            for NNOO in range(self.error2FormerLayer.shape[0]):
+                                self.error2FormerLayer[NNOO , NO, \
+                                                       h*self.colStride: h*self.colStride + self.receptiveFieldSize, \
+                                                       b*self.colStride: b*self.colStride + self.receptiveFieldSize] += \
+                                    self.weightListOfKernels[i]*kernelOutput[i,j,h,b]
+                                #主要问题在与，如何将卷积结果的像素点，与卷积核的输出对应起来。一对一是最简单的情况
         #计算这层卷积核的参数的梯度               
         # self.grad = np.zeros(self.weightListOfKernels.shape)
         for m in range(kernelNumOfThisLayer):
@@ -261,7 +315,7 @@ class CNN():
 #                                 tempGrad4Bias
                     self.grad[m,i,j] = tempGrad + 0.1*self.grad[m,i,j]
                     self.grad4Bias[m] = tempGrad4Bias + 0.1*self.grad4Bias[m]
-
+                    
 #         print("计算得到的梯度是", self.grad)
     def updateWeights(self,):
         # print("CNN", self.__dict__.keys())
