@@ -279,6 +279,11 @@ class CNN():
 
                         
                         
-                
+#     def updateWeights4Multi(self, grad, grad4Bias):
+#         # print("CNN", self.__dict__.keys())
+#         # print("本次更新参数使用 的梯度是",self.grad * self.learningRate )
+#         # print("当前的参数是", self.weightListOfKernels)
+#         self.weightListOfKernels -= (0.9*self.weightListOfKernels + 0.1 * grad) * self.learningRate
+#         self.biasList -= (0.9 * self.biasList + 0.1 * grad4Bias) * self.learningRate        
                 
         
