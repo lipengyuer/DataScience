@@ -29,6 +29,20 @@ def insertSort(numList):
             res = [num] + res
     return res
 
+
+def insertSortSimple(numList):
+    sortedNums = []
+    while len(numList)>0:
+        num = numList[0]
+        numList = numList[1:]
+        splitIndex = 0
+        for i in range(len(sortedNums)):
+            if sortedNums[i] >= num:
+                break
+            splitIndex += 1
+        sortedNums = sortedNums[:splitIndex] + [num] + sortedNums[splitIndex:]
+    return sortedNums
+
 def insertShellSort(numList):
     pass         
 #冒泡
@@ -50,3 +64,4 @@ if __name__ == '__main__':
     a = [1,6, 3,2,5,3,5, 2]
     print(insertSort(a))
     print(bubbleSort(a))
+    print(insertSortSimple(a))
