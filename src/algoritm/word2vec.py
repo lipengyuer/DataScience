@@ -139,6 +139,7 @@ class BPANN():
             totalCost = 0.
             pool = Pool(self.workerNum)
             batchSize = int(trainInput.shape[0]/self.workerNum)
+            if batchSize==0: batchSize=1
             resList = []
             for n in range(0, len(trainInput), batchSize):#遍历样本
 #                 print("神经网络正在学习第", n, "个训练数据。")
@@ -252,6 +253,7 @@ class SimpleWord2Vec():
         count = 0
         inputList = []
         wordList = []
+        wordFilter = set({})
         with open(corpusFileName, 'r') as f:
             line = f.readline()
             while line!="":
@@ -259,12 +261,13 @@ class SimpleWord2Vec():
                 wordsInThisLine = line.replace('\n', '').split(' ')[1:]
                 wordsInThisLine = list(filter(lambda x: len(x) > 0, wordsInThisLine))
                 if len(wordsInThisLine)<500: continue
-                trainingDataInput, _, fineWords = self.orgniseTraningData(wordsInThisLine)
+                print("正在生成词向量，读取的是第", count, "行语料。")
+                trainingDataInput, _, fineWords = self.orgniseTraningDataSimple(wordsInThisLine, filter=wordFilter)
+                wordFilter  = wordFilter | set(fineWords)
                 # print("词语", fineWords)
                 for i in range(len(fineWords)):
                     word = fineWords[i]
                     input4ANN  = trainingDataInput[i]
-                    if word in self.word2VectorMap: continue
                     inputList.append(input4ANN)
                     wordList.append(word)
                     
@@ -308,12 +311,36 @@ class SimpleWord2Vec():
                     break
         if word in resList: resList.remove(word)
         return resList
-        
-    def orgniseTraningData(self, wordList):
+
+    def orgniseTraningDataSimple(self, wordList, filter = None):
         trainingDataInputList, trainingDataOutputList = [], []
         fineWords = []
         for i in range(self.window, len(wordList)-self.window):
             targetWord = wordList[i]#需要预测的词语
+            if filter!=None and targetWord in filter: continue
+            #构造正例
+            if targetWord not in self.wordOneHotVectorMap: continue#如果这个词语是生僻词语，跳过
+            targetWordOneHot = self.wordOneHotVectorMap[targetWord]
+            contextWords = wordList[i-self.window:i] + wordList[i+1: i+1+ self.window]#上下文词语
+            contextWordsOneHot = [self.wordOneHotVectorMap.get(word, np.zeros(self.vocabSize)) for word in contextWords]
+#             print("上下文词语个数是", len(contextWords), len(contextWordsOneHot[0]))
+            if np.sum(contextWordsOneHot)<=1: continue
+            # print("输入的情况", np.sum(contextWordsOneHot))
+            positiveSample = [targetWordOneHot] + contextWordsOneHot
+            positiveSample = np.array(positiveSample).reshape((self.inputSizeOfNetwork))
+            trainingDataInputList.append(positiveSample)
+            trainingDataOutputList.append([1, 0])#正例
+            fineWords.append(targetWord)
+            
+        trainingDataInputList, trainingDataOutputList = np.array(trainingDataInputList), np.array(trainingDataOutputList)
+        return trainingDataInputList, trainingDataOutputList, fineWords
+           
+    def orgniseTraningData(self, wordList, filter = None):
+        trainingDataInputList, trainingDataOutputList = [], []
+        fineWords = []
+        for i in range(self.window, len(wordList)-self.window):
+            targetWord = wordList[i]#需要预测的词语
+            if filter!=None and targetWord in filter: continue
             #构造正例
             if targetWord not in self.wordOneHotVectorMap: continue#如果这个词语是生僻词语，跳过
             targetWordOneHot = self.wordOneHotVectorMap[targetWord]
