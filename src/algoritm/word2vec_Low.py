@@ -8,8 +8,6 @@ from multiprocessing import Pool
 #考虑到语料可能非常大，无法一次性加载，这里使用的过程是:(1)逐行读取语料，统计词频数据，并删除生僻词语
 #;（2）以行为单位，生成训练数据;(3)训练神经网络
 
-#使用softmax的word2vec训练太慢了，这里使用负采样的方式来降低计算量。
-#负采样是提升word2vec训练速度的3种经典策略中比较符合直觉的一种,不论是理论上还是实践中。
 
 class BPANN():
     
@@ -47,9 +45,6 @@ class BPANN():
             weighMatrix_i = np.array(weighMatrix_i)#处理成numpy.array,后面我们会直接使用矩阵运算，这样可以减少代码量
             #同时利用numpy加快运算速度
             self.weightMatrixList.append(weighMatrix_i)#把这层的权重矩阵存储器起来
-        #打印网络结构
-        for i in range(len(self.layerStruct)):
-            print("网络的第", i + 1 , '层节点数是', self.layerStruct[i])
             
     def predict4Train(self, inputData):#训练里使用的一个predict函数
         res = inputData
@@ -188,8 +183,7 @@ import time
 class SimpleWord2Vec():
     """"""
     def __init__(self, learningRate=0.001, window=3, min_count=1, del_top_N=100, \
-                 modelFile='model.pkl', workerNum=3, corpusSize=5, maxVocabSize=7000):
-        self.maxVocabSize = maxVocabSize
+                 modelFile='model.pkl', workerNum=3, corpusSize=5):
         self.corpusSize = corpusSize
         self.workerNum = workerNum
         self.learningRate = learningRate
@@ -207,85 +201,58 @@ class SimpleWord2Vec():
 
     def fit(self, corpusFileName):
         self.initVocab(corpusFileName)
-        self.ann = BPANN(learningRate=self.learningRate, stepNum=5, hiddenLayerStruct=[10],\
+        self.ann = BPANN(learningRate=self.learningRate, stepNum=20, hiddenLayerStruct=[10],\
                          workerNum=self.workerNum)
         #开始逐行读取数据并训练神经网络
-        epochNum =  10
-        for epoch in range(epochNum):
-            with open(corpusFileName, 'r') as f:
+        with open(corpusFileName, 'r') as f:
+            line = f.readline()
+            count = 0
+            while line!="":
+                t1 = time.time()
+                wordsInThisLine = line.replace('\n', '').split(' ')
+                wordsInThisLine = list(filter(lambda x: len(x)>0, wordsInThisLine))
+#                 print(wordsInThisLine)
+                trainingDataInput, trainingDataOutput, _ = self.orgniseTraningData(wordsInThisLine)
+                # print("标签数据是", len(trainingDataOutput[0]), np.sum(trainingDataOutput, axis=1))
+                # print("标签数据是", len(trainingDataInput[0]), np.sum(trainingDataInput, axis=1))
+
+                count += 1
+                print(_)
+                print("正在学习第", count, '句。这个句子有', len(wordsInThisLine), '个词语,训练数据数量是', trainingDataInput.shape[0])
+                self.ann.fit(trainingDataInput, trainingDataOutput)
+
                 line = f.readline()
-                count = 0
-                while line!="":
-                    t1 = time.time()
-                    wordsInThisLine = line.replace('\n', '').split(' ')[1:]
-                    wordsInThisLine = list(filter(lambda x: len(x)>0, wordsInThisLine))
-    #                 print(wordsInThisLine)
-                    trainingDataInput, trainingDataOutput, _ = self.orgniseTraningData(wordsInThisLine)
-                    # print("标签数据是", len(trainingDataOutput[0]), np.sum(trainingDataOutput, axis=1))
-                    # print("标签数据是", len(trainingDataInput[0]), np.sum(trainingDataInput, axis=1))
-    
-                    count += 1
-                    print(_)
-                    print(epoch, "轮。正在学习第", count, '句。这个句子有', len(wordsInThisLine), '个词语,训练数据数量是', trainingDataInput.shape[0])
-                    self.ann.fit(trainingDataInput, trainingDataOutput)
-    
-                    line = f.readline()
-                    
-                    t2 = time.time()
-                    print("耗时是",int(t2-t1))#, "更新后的结果是", list(self.word2VectorMap.items())[:10])
-                    self.save()
-                    if count%self.corpusSize==0:
-                        break
-                    if count%5==0:
-                        
-                        data = list(self.word2VectorMap.keys())[:10]
-                        print("正在计算每一个词语的词向量")
-                        self.generateVector4EachWord(corpusFileName)
-                        print("开始展示部分词语的关联词")
-                        for word in data:
-                            nearWord = self.getNearestWords(word)
-                            print(word, '的关联词是', list(map(lambda x: x[0], nearWord)))
+                self.generateVector4EachWord(corpusFileName)
+                t2 = time.time()
+                print("耗时是",int(t2-t1))#, "更新后的结果是", list(self.word2VectorMap.items())[:10])
+                self.save()
+                if count%self.corpusSize==0:
+                    break
+                data = list(self.word2VectorMap.keys())[:10]
+                for word in data:
+                    nearWord = self.getNearestWords(word)
+                    print(word, '的关联词是', list(map(lambda x: x[0], nearWord)))
 
 
     def generateVector4EachWord(self, corpusFileName):
         #获取每一个词语的词向量
         count = 0
-        inputList = []
-        wordList = []
         with open(corpusFileName, 'r') as f:
             line = f.readline()
             while line!="":
                 count += 1
-                wordsInThisLine = line.replace('\n', '').split(' ')[1:]
+                wordsInThisLine = line.replace('\n', '').split(' ')
                 wordsInThisLine = list(filter(lambda x: len(x) > 0, wordsInThisLine))
-                if len(wordsInThisLine)<500: continue
                 trainingDataInput, _, fineWords = self.orgniseTraningData(wordsInThisLine)
                 # print("词语", fineWords)
                 for i in range(len(fineWords)):
                     word = fineWords[i]
                     input4ANN  = trainingDataInput[i]
-                    if word in self.word2VectorMap: continue
-                    inputList.append(input4ANN)
-                    wordList.append(word)
-                    
+                    self.word2VectorMap[word] = self.ann.getWordVector(input4ANN)
                 line = f.readline()
                 if count%self.corpusSize==0:
                     break
-        pool = Pool(self.workerNum)
-        resList = []
-        for i in range(len(wordList)):
-            res = pool.apply_async(self.getWordVector, args=(word, input))
-            resList.append(res)
-        pool.close()
-        pool.join()
-        for res in resList:
-            [word, vector] = res.get()
-            self.word2VectorMap[word] = vector
 
-    def getWordVector(self, word, input):
-        vector = self.ann.getWordVector(input)
-        return [word, vector]
-        
     def getNearestWords(self, word, topN=10):
         distMap = {}
         if word not in self.vocabSet: return []
@@ -296,45 +263,24 @@ class SimpleWord2Vec():
             distMap[aword] = np.sqrt(np.sum((vector-self.word2VectorMap[aword])**2))
         words = sorted(distMap.items(), key=lambda x: x[1])[:topN]
         return words
-    
-    def negativeSampling(self, word, N=5):#从词汇表中抽样，除了这个词语
-        resList = []
-        for i in range(N):
-            r = random.uniform(0, 1)
-            for word in self.rSpan4EachWord:
-                startEnd = self.rSpan4EachWord[word]
-                if startEnd[0] <= r <= startEnd[1]:
-                    resList.append(word)
-                    break
-        if word in resList: resList.remove(word)
-        return resList
-        
+
     def orgniseTraningData(self, wordList):
         trainingDataInputList, trainingDataOutputList = [], []
         fineWords = []
         for i in range(self.window, len(wordList)-self.window):
             targetWord = wordList[i]#需要预测的词语
-            #构造正例
             if targetWord not in self.wordOneHotVectorMap: continue#如果这个词语是生僻词语，跳过
             targetWordOneHot = self.wordOneHotVectorMap[targetWord]
+            
             contextWords = wordList[i-self.window:i] + wordList[i+1: i+1+ self.window]#上下文词语
             contextWordsOneHot = [self.wordOneHotVectorMap.get(word, np.zeros(self.vocabSize)) for word in contextWords]
 #             print("上下文词语个数是", len(contextWords), len(contextWordsOneHot[0]))
             if np.sum(contextWordsOneHot)<=1: continue
             # print("输入的情况", np.sum(contextWordsOneHot))
-            positiveSample = [targetWordOneHot] + contextWordsOneHot
-            positiveSample = np.array(positiveSample).reshape((self.inputSizeOfNetwork))
-            trainingDataInputList.append(positiveSample)
-            trainingDataOutputList.append([1, 0])#正例
+            contextWordsOneHot = np.array(contextWordsOneHot).reshape((self.inputSizeOfNetwork))
+            trainingDataInputList.append(contextWordsOneHot)
+            trainingDataOutputList.append(targetWordOneHot)
             fineWords.append(targetWord)
-            
-            #接下来构造负例
-            negativeWords = self.negativeSampling(targetWord)
-            for word in negativeWords:
-                negativeSample = [targetWordOneHot] + contextWordsOneHot
-                trainingDataInputList.append(negativeSample)
-                trainingDataOutputList.append([0, 1])#负例
-            
         trainingDataInputList, trainingDataOutputList = np.array(trainingDataInputList), np.array(trainingDataOutputList)
         return trainingDataInputList, trainingDataOutputList, fineWords
             
@@ -348,41 +294,25 @@ class SimpleWord2Vec():
             with open(corpusFileName, 'r') as f:
                 line = f.readline()
                 while line!="":
-                    wordsInThisLine = line.replace('\n', '').split(' ')[1:]
+                    wordsInThisLine = line.replace('\n', '').split(' ')
                     for word in wordsInThisLine: wordFreqMap[word] = wordFreqMap.get(word, 0) + 1
                     line = f.readline()
                     count += 1
                     if count%self.corpusSize==0: break
                 #删除生僻词语
             wordFreqList = sorted(wordFreqMap.items(), key=lambda x: x[1])[:-self.del_top_N]
-            wordFreqList = wordFreqList[-self.maxVocabSize:]
-            finalWordFreqMap = {}
             for [word, freq] in wordFreqList:
-                if freq >= self.min_count: 
-                    self.vocabSet.add(word) 
-                    finalWordFreqMap[word] = freq
-
+                if freq >= self.min_count: self.vocabSet.add(word) 
+        
         self.vocabSize = len(self.vocabSet)
         self.vocabList = list(self.vocabSet)
-        self.inputSizeOfNetwork = 2*self.vocabSize * self.window + self.vocabSize#带有负采样策略的情况下，
-        #目标自于和上下文词语都会作为神经网络的输入
+        self.inputSizeOfNetwork = 2*self.vocabSize * self.window
         print("aa词汇表的大小是", self.vocabSize, self.inputSizeOfNetwork)
         for i in range(self.vocabSize):
             oneHotVector = np.zeros(self.vocabSize)
             oneHotVector[i] = 1#这个词语的位置置为1,形成独热编码
             thisWord = self.vocabList[i]
             self.wordOneHotVectorMap[thisWord] = oneHotVector
-            
-        self.rSpan4EachWord = {}#存储每一个词语对应的r值区间。0<=r<=1，每个词语分得与词频成正比长度的一段。
-        #负采样的时候，均匀随机数如果落在一个词语对应的线段内，就挑选这个词语
-        sumOfFreq = 0
-        for word in finalWordFreqMap: sumOfFreq += (finalWordFreqMap[word])**0.75
-        tempSpan = np.array([0, 0])
-        for word in finalWordFreqMap:
-            tempSpan[0] = tempSpan[1]
-            tempSpan[1] = tempSpan[1] + finalWordFreqMap[word]**0.75/sumOfFreq
-            self.rSpan4EachWord[word] = tempSpan[:]
-            
     def save(self):
         import pickle
         with open(self.modelFile, 'wb') as f:
@@ -400,8 +330,8 @@ if __name__ == '__main__':
     #         line = ' '.join(lines[i: i + 500]).replace("\n", '') + '\n'
     #         f.write(line)
     modelFile = 'model.pkl'
-    model = SimpleWord2Vec(learningRate=0.1, window=2, min_count=3, corpusSize=10000,
-                           del_top_N=1000, modelFile=modelFile, workerNum=10, maxVocabSize=7000)
+    model = SimpleWord2Vec(learningRate=-0.1, window=2, min_count=2, corpusSize=50,
+                           del_top_N=100, modelFile=modelFile, workerNum=10)
     model.fit(corpusFileNew)
 
 #     model = pickle.load(open(modelFile, 'rb'))
