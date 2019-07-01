@@ -1,0 +1,12 @@
+{"char_set_size": 6000,
+"char_id_map_file": "./model/char_id_map.pkl",
+"id_char_map_file": "./model/id_char_map.pkl",
+"class_label_id_map_file": "./model/class_label_id_map.pkl",
+"class_num": 2,
+"max_text_length": 150,
+"embedding_size": 100,
+"train_corpus_dir": "./weibo/train",
+"test_corpus_dir": "./weibo/test",
+"train_corpus_for_embedding": "D:/backup/mydata/tieba_posts",
+"check_points_dir": "./check_points_dir"
+}
