@@ -80,12 +80,17 @@ class LSA():
         #展示主题和词语的对应关系
         word_list = []
         for i in range(self.V.shape[1]): word_list.append(self.id_word_map[i])
+        print("主题的词语分布是：")
         self.print_list(word_list)
         for i in range(self.V.shape[0]):
             self.print_list(self.V[i, :])
-            
+        print("第1个主题的词语列表里，主要是和国庆相关的，可以定义为”国庆话题“；第2个主题的词语主要和孩子相关，可以定义为”闺女话题“")
+        
         #打印每篇文档的主题分布
-        print(self.U)
+        print("各篇文档的主题分布是:")
+        for i in range(self.U.shape[0]):
+            print(document_list[i], self.U[i, :])
+        print("可以看到，第2篇和第7篇的主题是”闺女话题"", 其他文档是关于国庆的。")
      
     #把一个列表的元素，整齐的打印成一行
     def print_list(self, element_list):
