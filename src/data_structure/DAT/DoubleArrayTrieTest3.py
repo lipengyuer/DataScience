@@ -207,17 +207,12 @@ class DoubleArrayTrie():
     def containsKey(self, char_ids_in_term):
         start_status = 0
         for a_char_id in char_ids_in_term:
-#             print(start_status, self.base[start_status], a_char_id)
-            if start_status<0: start_status = -start_status
-            new_index = self.base[start_status] + a_char_id if self.base[start_status]>0 \
-                               else -self.base[start_status] + a_char_id
-#             print("待检查", start_status, "字编码是", a_char_id, new_index)
-#             print(new_index)
+            former_base = self.base[start_status]
+            new_index = former_base + a_char_id if former_base>0 else -former_base + a_char_id
             if self.base[new_index]==0:#如果位置是空的
                 return False
             else:
-#                 print("a_char_id", id_char_map[a_char_id], new_index, self.check[new_index], start_status)
-                if np.abs(self.check[new_index]) == start_status:#如果当前节已经收录，不需要插入，开始考虑下一个状态
+                if self.check[new_index] == start_status:#如果当前节已经收录，不需要插入，开始考虑下一个状态
                     start_status = new_index
                     continue
                 else:
@@ -238,7 +233,7 @@ import pickle
 if __name__ == '__main__':
     term_list = list(open(r"e:\work\data\CoreNatureDictionary.txt", 'r', encoding='utf8').readlines())
     term_list = list(map(lambda x: x.split("\t")[0], term_list))
-    term_list = term_list[:200000] + ["人民"]
+    term_list = term_list[:20000] + ["人民"]
 #     term_list = term_list[1650:1690] +term_list[1730:1800] +  ["人民"]
 #     print(term_list)
 #     term_list = list(filter(lambda x: "人" in x, term_list))
