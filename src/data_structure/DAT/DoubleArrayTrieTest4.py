@@ -8,6 +8,7 @@ import numpy as np
 import time  
 from  HashMapTrie import TrieHashMap, Node
 import copy
+from docutils.nodes import term
 #这一版需要解决一个问题，即重复遍历词表导致的DAT构件速度太低。
 #需要借鉴图的遍历算法，使用一个描述节点是否已经遍历过的数据结构，来辅助遍历过程。
 class HashMapTriePlus(TrieHashMap):
@@ -109,7 +110,6 @@ class DoubleArrayTrie():
     #考察与node同源的节点的情况
     def update(self, former_status, parent_path, node):
         delta = self.base[former_status]
-        ori_delta = delta
         delta = delta if delta>0 else -delta
         children_nodes = self.hash_trie.get_children_nodes(parent_path)
         while children_nodes!=False:
@@ -130,30 +130,22 @@ class DoubleArrayTrie():
         if children_nodes!=False:
             for b_char in children_nodes.keys():
                 b_index = delta + ord(b_char)
-#                 ori_b_index = ori_delta + ord(b_char)
-#                 self.base[b_index] = -1 if self.base[ori_b_index]<0 else 1
                 self.base[b_index] = -1 if children_nodes[b_char].if_leaf() else 1
                 self.check[b_index] = former_status
-                
-#                 self.base[ori_b_index] = 0
-#                 self.check[ori_b_index] = 0
                       
-    def containsKey(self, char_ids_in_term):
+    def containsKey(self, term):
         start_status = 0
-        for a_char_id in char_ids_in_term:
-#             print(a_char_id)
+        for a_char in term:
+            
             former_base = self.base[start_status]
-            new_index = former_base + a_char_id if former_base>0 else -former_base + a_char_id
-            if self.base[new_index]==0:#如果位置是空的
-                return False
-            else:
-                if self.check[new_index] == start_status:#如果当前节已经收录，不需要插入，开始考虑下一个状态
-                    start_status = new_index
-                    continue
-                else:
-                    return False
+            new_index = former_base + ord(a_char) if former_base>0 else -former_base + ord(a_char)
+            print(a_char, start_status, self.check[new_index])
+            if self.check[new_index] == start_status:#如果当前节已经收录，不需要插入，开始考虑下一个状态
                 start_status = new_index
-#         print("判断是否为叶子节点", new_index, self.base[new_index])
+                continue
+            else:
+                return False
+        print("判断是否为叶子节点", new_index, self.base[new_index])
         if self.base[new_index] < 0:
             return True
         else:
@@ -168,11 +160,11 @@ import pickle
 if __name__ == '__main__':
     term_list = list(open(r"C:\Users\lipy\Desktop\work\hanlp_data\data\dictionary\CoreNatureDictionary.txt", 'r', encoding='utf8').readlines())
     term_list = list(map(lambda x: x.split("\t")[0], term_list))
-    term_list = term_list[:20000]# + ["人民"]
+    term_list = term_list[:2] + ["中", "中中", "大人的中国"]
 #     term_list = term_list[1650:1690] +term_list[1730:1800] +  ["人民"]
     term_list = list(set(term_list))
     term_list = sorted(term_list)
-#     print(term_list)
+    print(term_list)
     max_len = 1
     for term in term_list:
         if len(term)> max_len: max_len = len(term)
@@ -182,23 +174,19 @@ if __name__ == '__main__':
     t1 = time.time()
     dat.build(term_list)
     t2 = time.time()
+    pickle.dump(dat, open("dat.pkl", 'wb'))
     print("构建耗时", t2 - t1)
 
-# #     
-#     pickle.dump(dat, open("dat.pkl", 'wb'))
-#     dat = pickle.load(open("dat.pkl", 'rb'))
-#     for term in term_list:
-#         char_ids_in_term = [ord(key) for key in term]
-#         print("检查DAT的功能",  dat.containsKey(char_ids_in_term))
+    dat = pickle.load(open("dat.pkl", 'rb'))
+    for term in term_list[:10]:#["人民", "中古", ":", "乙十六", "令人堪忧啊"]:
+        char_ids_in_term = [ord(key) for key in term]
+        print("检查DAT的功能",  dat.containsKey(term))
 
-    count = 20000000
-    char_ids_in_term = [ord(key) for key in "东方美亚"]
-#     print("char_ids_in_term", char_ids_in_term)
-    t1 = time.time()
-    for i in range(count):
-        dat.containsKey(char_ids_in_term)
-    t2 = time.time()
-    print("速度是", int(count/(t2 - t1)))
-#     
-#     
-#     
+#     count = 20000000
+# #     print("char_ids_in_term", char_ids_in_term)
+#     t1 = time.time()
+#     for i in range(count):
+#         dat.containsKey("东方美亚")
+#     t2 = time.time()
+#     print("速度是", int(count/(t2 - t1)))
+  
